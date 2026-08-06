@@ -6,9 +6,9 @@
 | **Author** | daoji / Grok Build |
 | **Date** | 2026-08-06 |
 | **Status** | Draft（Rev 4 — 用户拍板：DSU 画像 A + 原地 hard-rename；实施从 PR1 开始） |
-| **Base branch** | `merge/lityrgia-vmp` @ `/Users/daoji/Code/TiDaoji` (commit `78e3283`) |
+| **Base branch** | `merge/lityrgia-vmp` @ `/Users/daoji/Code/TitanHide` (commit `78e3283`) |
 | **Target product name** | **TiDaoji**（驱动 `TiDaoji.sys`） |
-| **Repo** | **原地 hard-rename**：`/Users/daoji/Code/TiDaoji` 内改名，保留同一 git 历史（K21） |
+| **Repo** | **原地 hard-rename**：`/Users/daoji/Code/TitanHide` 内产品身份 hard-rename TitanHide→TiDaoji，保留同一 git 历史（K21） |
 | **DSU profile** | **画像 A：仅临时 DSE**；全程 PG 开启；接受层 B 在 PG 下 long-lived 残余风险（K20） |
 | **Implementation now** | **仅 PR1 rename**（PR2 InfinityHook 未开工） |
 
@@ -702,7 +702,7 @@ void Deinitialize();
 
 ## Rollout Plan
 
-1. 仓库：`/Users/daoji/Code/TiDaoji` **原地 hard-rename**（K21）；分支自 `merge/lityrgia-vmp` 拉 `feature/tidaoji-infinityhook`（或等价）。
+1. 仓库：`/Users/daoji/Code/TitanHide` **原地 hard-rename**（K21）；分支自 `merge/lityrgia-vmp` 拉 `feature/tidaoji-infinityhook`（或等价）。
 2. **当前实施范围：仅 PR1 rename**；PR2 及以后未开工。
 3. 按 PR Plan 增量；**PR1/PR2 README 顶栏标注 `NOT PG-SAFE / still SSDT or engine-not-wired`**，直至 PR3 合并。
 4. 验证（PR3+）：**画像 A**（仅 DSE，PG 全程 on）装载 → hide → restore DSE → **≥2h** 耐久 + U1/U2/U3 + V1–V15 子集。
@@ -735,7 +735,7 @@ void Deinitialize();
 | **K18** | **CKCL Enable 仅在 `Start`**；`Initialize` 无内核变异；失败用 `Cleanup`/`RollbackStartPartial` 非裸 `Stop` | 消除 Ready+Start 失败时 ETW 残留 |
 | **K19** | **ConflictProbe 禁止单靠 `GetCpuClock==2`**；以 Hvl/stock 快照与外来指针为准 | 避免现代 build 干净机误杀 |
 | **K20** | **DSU 画像 A：仅临时 DSE；PG 全程开启**；接受 InfinityHook 层 B 在 PG 下 long-lived 风险 | 用户 2026-08-06 拍板；不走画像 B |
-| **K21** | **原地 hard-rename**：在 `/Users/daoji/Code/TiDaoji` 内 TiDaoji→TiDaoji，**同一 git 历史**；不新建平行仓库 | 用户 2026-08-06 拍板 |
+| **K21** | **原地 hard-rename**：在 `/Users/daoji/Code/TitanHide` 内 TitanHide→TiDaoji，**同一 git 历史**；不新建平行仓库 | 用户 2026-08-06 拍板 |
 | **K22** | **实施顺序：先 PR1 rename only**；PR2 InfinityHook 另开 | 用户 2026-08-06 拍板 |
 
 ---
@@ -743,7 +743,7 @@ void Deinitialize();
 ## Open Questions
 
 1. ~~**DSU 确切工具与画像**~~ → **Resolved（K20）**：画像 **A（仅临时 DSE）**；PG 全程 on；接受层 B 在 PG 下残余风险。具体 DSU 二进制/命令行可在 PR5 补全，**不**再选 B。  
-2. ~~**仓库形态**~~ → **Resolved（K21）**：**原地 hard-rename** `/Users/daoji/Code/TiDaoji`，保留同一 git 历史。  
+2. ~~**仓库形态**~~ → **Resolved（K21）**：**原地 hard-rename** `/Users/daoji/Code/TitanHide`，保留同一 git 历史。  
 3. **Olly / TitanEngine**：本期是否随 PR1 一并改名发布？（PR1 矩阵含其字符串；可只改名不重点测）  
 4. **日志路径**：仍 `C:\TiDaoji.log` 还是默认关文件日志？  
 5. ~~运行时互斥~~ → **已关闭**：PR3 硬失败。  
@@ -755,7 +755,7 @@ void Deinitialize();
 
 ## References
 
-- TiDaoji：`/Users/daoji/Code/TiDaoji` @ `78e3283`  
+- TiDaoji：`/Users/daoji/Code/TitanHide` @ `78e3283`  
 - `TiDaoji.cpp` DriverEntry/Unload；`hooks.cpp` Initialize；`ssdt.cpp`/`hooklib.cpp`  
 - `hider.cpp` KdDebuggerEnabled；`TiDaoji.h` HIDE_*  
 - `plugin.cpp` 命令与 Stop 漏 unregister  
@@ -772,7 +772,7 @@ void Deinitialize();
 
 - **Title**：`rename: TiDaoji identity surfaces → TiDaoji`
 - **Scope now**：**仅本 PR**（K22）；不引入 infinity_hook、不改 hook 引擎。
-- **Repo**：在 `/Users/daoji/Code/TiDaoji` **原地**改名（K21），同一 git 历史。
+- **Repo**：在 `/Users/daoji/Code/TitanHide` **原地**改名（K21），同一 git 历史。
 - **Files**：驱动/插件/GUI/Test/Olly/TE 名称与字符串；vcxproj `TargetName`（含 `.dp64`）；头守卫；`CBSYSTEMBREAKPOINT` 命令串；`TiDaojiStop` 全命令 unregister；`install_driver.bat`；fallback `L"TiDaoji"`；可选目录/工程 `TiDaoji*`→`TiDaoji*`
 - **Dependencies**：无
 - **Description**：纯身份。`rg` 门禁清零。仍 SSDT。  
