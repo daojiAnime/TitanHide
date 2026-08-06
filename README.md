@@ -20,6 +20,8 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 族谱与新系统兼容对照（InfinityHookProMax / FiYHer / zhutingxf / CR）：见  
 `docs/2026-08-06-infinityhook-lineage-newos-research.md`（含 Claude 审稿 §10.2）。
 
+**路线（PR3 后）**：**PR4 插件/GUI → PR5 DSU runbook → 实机/VMP 矩阵最后**。矩阵不阻塞 PR4/5。
+
 ### 运维限制（研究机）
 
 - **禁止与 CR 等同族 InfinityHook 双挂**；先 `sc stop` 卸 CR，再起 TiDaoji（否则 `ConflictProbe` 硬失败）。

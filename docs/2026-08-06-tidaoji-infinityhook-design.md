@@ -794,50 +794,74 @@ void Deinitialize();
   - **仍不**接线 `Hooks` 生产 hide  
 - **README 顶栏**：`engine present but not wired; still SSDT for hide`
 
-### PR3 — Hooks 切换 InfinityHook + 契约落地
+### PR3 — Hooks 切换 InfinityHook + 契约落地 — **代码已合入**
 
 - **Title**：`feat: wire Hooks to InfinityHook; strict resolve; conflict fail; unload order`
-- **Files**：`hooks.cpp/h`；`TiDaoji.cpp` Entry/Unload；`ssdt` 隔离写路径；卸 hooklib 生产链接
+- **Status**：**done** on `pr3/wire-infinity-hook`（接线 + 残余缓解 + 研究文档）；**不**以 live 矩阵为 PR3 关门条件
+- **Files**：`hooks.cpp/h`；`TiDaoji.cpp` Entry/Unload；`ssdt` 隔离写路径；hooklib 写路径冻结
 - **Dependencies**：PR2（**禁止**在未修 Issue2/PR2 时宣称可卸载）
 - **Description**：  
   - 指针回调 + 11/10 全解析  
   - DriverEntry 检查返回值；失败清理设备  
   - CR 冲突硬失败  
   - Unload：Stop → drain 默认 5s（可 10s）→ 删设备  
-  - 日志 DoD + 验收表 V1–V15 / U1–U3  
-  - README 更新风险模型（消除 SSDT 经典 0x109；**不**称 PG-safe）  
-- **VMP 持续调试验收钉在本 PR 之后**（PR4 可先合代码，验收以 PR3 为准）
+  - README 风险模型（消除 SSDT 经典 0x109；**不**称 PG-safe）  
 
-### PR4 — x64dbg 插件与 GUI 打磨
+### 实施顺序（2026-08-07 拍板）
+
+> **PR3 代码完成后：先 PR4 → PR5，实机/VMP 矩阵验收最后。**  
+> 理由：用户态与运维路径先齐，再烧实验室时间；矩阵不能阻塞产品面。
+
+| 顺序 | 项 | 说明 |
+|------|-----|------|
+| 1 | **PR4** 插件/GUI | 当前优先 |
+| 2 | **PR5** DSU A runbook | 紧随 PR4（可与 PR4 并行文档） |
+| 3 | **PR6** 可选硬化 | 不挡 PR4/5 |
+| 4 | **实机验证 / 支持矩阵 / VMP 冒烟** | **最后**；填研究 §8；不挡 PR4/5 合入 |
+
+### PR4 — x64dbg 插件与 GUI 打磨 — **下一实施目标**
 
 - **Title**：`feat(plugin): TiDaoji commands and settings`
-- **Dependencies**：PR1（功能验收依赖 PR3）
-- **Description**：命令、BridgeSetting、自动 hide；Olly/TE 按 Open Question #3
+- **Dependencies**：PR1 身份 + PR3 驱动契约（本地可用 `TiDaoji.sys` 即可联调；**不**要求矩阵全绿）
+- **Description**：  
+  - 命令、BridgeSetting、自动 hide 路径打磨  
+  - GUI 与驱动设备名/选项位一致  
+  - Olly/TE 按 Open Question #3（可后置）  
+- **DoD（PR4）**：插件命令可对运行中驱动写 `HIDE_INFO`；设置持久化；文档/帮助字符串与 PR1 名一致 — **不以 24H2/VMP 全矩阵为门禁**
 
-### PR5 — 装载 Runbook
+### PR5 — 装载 Runbook — **PR4 后或并行**
 
 - **Title**：`docs: DSU load/restore runbook (profile A only)`
-- **Dependencies**：PR3
+- **Dependencies**：PR3 风险模型已文档化
 - **Description**：  
   - **仅画像 A**（K20）：临时 DSE；PG 全程 on；接受层 B 风险  
   - restore **只验证 DSE/签名策略**，不验证 hook 已卸  
   - 占位「工具名 / 进入 DSE 窗口命令 / restore 命令 / 验收命令」  
-  - 互斥红字；回滚步骤
+  - 互斥红字（卸 CR）；回滚步骤；长睡/QPC 限制  
+- **DoD（PR5）**：runbook 可独立照做装载；**不**要求矩阵实测结果
 
 ### PR6（可选）— 硬化
 
 - **Title**：`chore: pool2, finer phase logs, unload tuning`
 - **Dependencies**：PR3  
-- **Note**：互斥检测 **不** 放本 PR（已在 PR3）
+- **Note**：互斥检测 **不** 放本 PR（已在 PR3）；**排在 PR4/5 之后**
+
+### 实机验证（最后阶段，非 PR 编号门禁）
+
+- 填 `docs/2026-08-06-infinityhook-lineage-newos-research.md` §8  
+- 优先 VM build 一档 + 可选 24H2；VMP/123.dll hide 冒烟  
+- **禁止**用「矩阵未跑」阻塞 PR4/PR5 合并
 
 ```mermaid
 flowchart LR
-  PR1[PR1 Rename + NOT PG-SAFE banner] --> PR2[PR2 IH + IsStarted fix]
-  PR2 --> PR3[PR3 Wire + contracts]
-  PR1 --> PR4[PR4 Plugin]
-  PR3 --> PR4
+  PR1[PR1 Rename] --> PR2[PR2 IH engine]
+  PR2 --> PR3[PR3 Wire done]
+  PR3 --> PR4[PR4 Plugin next]
   PR3 --> PR5[PR5 Runbook]
+  PR4 --> Live[Live matrix / VMP last]
+  PR5 --> Live
   PR3 --> PR6[PR6 Optional]
+  PR4 --> PR6
 ```
 
 ---
@@ -852,3 +876,4 @@ flowchart LR
 | Draft Rev 4 | 2026-08-06 | 用户拍板：K20 DSU 画像 A（仅 DSE，PG 全程 on）；K21 原地 hard-rename 同 git 历史；K22 实施仅 PR1；Open Q #1/#2 Resolved；PR5 仅 A；同步 `docs/2026-08-06-tidaoji-infinityhook-design.md` |
 | Draft Rev 5 | 2026-08-06 | PR3 后残余风险落地：Unload drain 2s；SSDT/hooklib 写路径默认冻结；Start FAIL reason 分流；残余表补 PR3+ 列 |
 | Draft Rev 6 | 2026-08-06 | 关联研究：`docs/2026-08-06-infinityhook-lineage-newos-research.md`（IHPM/族谱/新系统；Claude §10.2） |
+| Draft Rev 7 | 2026-08-07 | **顺序拍板**：PR3 后先 **PR4 → PR5**；实机/VMP/支持矩阵 **最后**；不挡 PR4/5 合入 |

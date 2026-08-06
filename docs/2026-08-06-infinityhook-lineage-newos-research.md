@@ -317,13 +317,12 @@ TiDaoji 运维含义：研究机避免 S3/S4 长睡；不要当“时间源可�
 
 | P | 动作 | 理由 | 工作量 |
 |---|------|------|--------|
-| P0 | 本文 + 设计 Rev5 残余表保持链接 | 决策可追溯 | 本文 |
-| P0 | 目标 VM 跑支持矩阵（至少 22000 + 一档 24H2） | 唯一真兼容证据 | 半天级 |
-| P1 | drain 默认改 5s 或文档写“研究卸载 10s” | 对齐 IHPM 经验 | **已落地**：默认 `TIDAOJI_UNLOAD_DRAIN_MS=5000`；研究可 10000 |
-| P1 | pattern 失败时日志打印 **build + 哪个符号** | 可观测 | **已落地**：`Init FAIL build=%ld symbol=…` |
-| P2 | 与 zhutingxf `hook.cpp` 做一次符号级 diff，列“TiDaoji 缺注释/缺备用特征” | 防 24H2 静默 | 半天（未阻塞 in-repo 落地） |
-| P2 | runbook：禁止与 CR 双挂；先卸 CR | 已设计 | **已落地** README 运维限制 |
-| P3 | 睡眠/QPC 问题写进 README 限制 | zhutingxf 已知 | **已落地** README |
+| — | 本文 + 残余缓解 + 门禁 | in-repo | **已落地**（PR3 tip） |
+| **P0 产品** | **PR4** 插件/GUI 打磨 | 用户路径 | **下一目标**（先于实机矩阵） |
+| **P0 运维** | **PR5** DSU 画像 A runbook | 装载可照做 | **PR4 后或并行** |
+| P1 代码 | drain 5s / Init symbol 日志 / SSDT 冻结 | 残余风险 | **已落地** |
+| **最后** | 目标 VM 支持矩阵 + VMP 冒烟 | 唯一兼容证据 | **不挡 PR4/5**；§8 PENDING-ENV |
+| 之后 | zhutingxf pattern diff / PR6 硬化 | 矩阵失败再驱动 | P2 |
 | **不做** | 整仓替换为 IHPM | 倒退 | — |
 | **不做** | 开 `TIDAOJI_ALLOW_SSDT_FALLBACK` 上生产 | 经典 0x109 | — |
 
