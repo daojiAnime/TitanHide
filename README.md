@@ -135,7 +135,7 @@ Restore **不**卸载驱动、**不**撤销层 B；hide 依赖仍存活的 IH �
 | 软卸载 | `tools\loader\soft_unload.bat` / `TiDaojiSoftUnload` | map 路径无 sc stop |
 
 驱动：`DriverObject==NULL` → `IoCreateDriver`；`HIDE_INFO.SoftUnload`。  
-详文：`docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md`  
+详文：`docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md`（含 **§12 对抗/红队检测矩阵**）  
 DSE 工具：`tools/dse/README.md`
 
 ## Remarks

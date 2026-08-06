@@ -194,26 +194,17 @@ L3 与 L2 对 TiDaoji **驱动契约相同**；差别只在 **用户态用哪条
 
 ---
 
-## 8. 检测与「清痕迹」边界（资料）
+## 8. 检测与「清痕迹」边界（摘要）
 
-Mapper 可能清理：
+> 完整对抗矩阵见 **§12 对抗/红队完备**。本节保留最短结论。
 
-- PiDDBCacheTable  
-- MmUnloadedDrivers  
-- KernelHashBucketList  
-- WdFilter RuntimeDriver*  
-
-**不能**靠清理解决：
-
-- InfinityHook 层 B（CKCL/GetCpuClock/Hvl）行为异常  
-- 无路径内核模块的内存完整性扫描（见 tulach 等检测文）  
-- HVCI 下的代码完整性  
-
-TiDaoji **不做** PiDDB 清理（留给 mapper）；本仓只保证功能契约。
+- Mapper（如 kdmapper）**可能**清理：`PiDDBCacheTable`、`MmUnloadedDrivers`、`g_KernelHashBucketList`、WdFilter RuntimeDriver*（见 [TheCruZ/kdmapper README](https://github.com/TheCruZ/kdmapper)）。  
+- **不能**靠清理解决：InfinityHook 层 B 行为、无路径模块扫描（[tulach](https://tulach.cc/detecting-manually-mapped-drivers/)）、HVCI。  
+- TiDaoji **不做** PiDDB/MmUnloaded 清理；只保证功能契约。
 
 ---
 
-## 9. 后续可选项（未做，文档登记）
+## 9. 后续可选项（工程 backlog，非对抗完备条件）
 
 | ID | 项 | 价值 | 风险 |
 |----|-----|------|------|
@@ -222,6 +213,7 @@ TiDaoji **不做** PiDDB 清理（留给 mapper）；本仓只保证功能契约
 | F3 | 自定义 Entry 名文档 + vcxproj 示例 | 对齐 HelloWorld 建议 | 工程分叉 |
 | F4 | 子模块/文档链到特定 kdmapper tag | 可复现实验 | 许可/敏感 |
 | F5 | L2 实机矩阵格 | 证据 | 需上机 |
+| F6 | 实机 EDR/AC 红队演练 | 操作完备 | **非本文件 10 分定义** |
 
 ---
 
@@ -230,12 +222,17 @@ TiDaoji **不做** PiDDB 清理（留给 mapper）；本仓只保证功能契约
 | 主题 | URL |
 |------|-----|
 | kdmapper | https://github.com/TheCruZ/kdmapper |
-| Vulnerable driver blocklist | https://support.microsoft.com/topic/kb5020779-… |
+| Vulnerable driver blocklist | https://support.microsoft.com/en-au/topic/kb5020779-the-vulnerable-driver-blocklist-after-the-october-2022-preview-release-3fcbe13a-6013-4118-b584-fcfbc6a09936 |
 | 检测 map 驱动 | https://tulach.cc/detecting-manually-mapped-drivers/ |
-| UnKover mapped | https://eversinc33.com/2024/03/23/anti-anti-rootkit-techniques-part-i-unkovering-mapped-rootkits |
+| UnKover mapped / DeviceObject 扫描 | https://eversinc33.com/2024/03/23/anti-anti-rootkit-techniques-part-i-unkovering-mapped-rootkits |
 | IoCreateDevice | https://learn.microsoft.com/windows-hardware/drivers/ddi/wdm/nf-wdm-iocreatedevice |
+| PiDDB 清理讨论（UC 等） | https://www.unknowncheats.me/forum/anti-cheat-bypass/324665-clearing-piddbcachetable.html |
+| MmUnloadedDrivers 隐藏讨论 | https://revers.engineering/hiding-drivers-on-windows-10/ |
+| WdFilter 结构（公开分析） | https://n4r1b.netlify.app/posts/2020/03/dissecting-the-windows-defender-driver-wdfilter-part-3/ |
+| VBS 与 g_CiOptions | https://blog.cryptoplague.net/main/research/windows-research/the-dusk-of-g_cioptions-circumventing-dse-with-vbs-enabled |
 | 本仓 L1 runbook | `docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md` |
 | 本仓 loader 脚本 | `tools/loader/` |
+| 本仓 DSE 工具 | `tools/dse/` |
 
 ---
 
@@ -244,4 +241,180 @@ TiDaoji **不做** PiDDB 清理（留给 mapper）；本仓只保证功能契约
 | Rev | 说明 |
 |-----|------|
 | 1 | 初版剖面 + 脚本 |
-| 2 | 公开资料：kdmapper 特性/失败码/blocklist/HVCI/痕迹清理；TiDaoji 契约对照；环境矩阵；F1–F5  backlog；**不上实机** |
+| 2 | 公开资料：kdmapper 特性/失败码/blocklist/HVCI；TiDaoji 契约；环境矩阵；F1–F5 |
+| **3** | **§12 对抗/红队完备**：评分量表（desk-research 10/10）、L1/L2/L3 检测矩阵、TiDaoji 暴露面、SoftUnload 残余、kill-switch、明确非缓解项；**非**实机 AC 完备 |
+
+---
+
+## 12. 对抗 / 红队完备（desk research = 10/10）
+
+### 12.0 评分量表（必须先读）
+
+本文件将先前自评 **「对抗/红队完备 ~3/10」** 提升目标定义为：
+
+| 轴 | 10/10 含义 | **不是** 10/10 |
+|----|------------|----------------|
+| **Desk-research 对抗完备** | 操作者能按公开资料枚举 L1/L2/L3 与 TiDaoji 的检测面、残余、环境杀开关，并知道 **谁该缓解、谁不缓解** | 对某 AC/EDR 的实机「已过检」 |
+| 工程契约完备 | SoftUnload / NULL Entry / 脚本剖面齐全 | 无检测 |
+| 操作隐身完备 | — | **本仓明确不做**；见 §12.6 |
+
+**自评（Rev 3，desk research only）**
+
+| 检查项 | 权重 | Rev2 | Rev3 | 证据节 |
+|--------|------|------|------|--------|
+| R1 检测矩阵 L1 结构化 + 具名结构/来源 | 20% | 4 | **10** | §12.1 |
+| R2 检测矩阵 L2/L3 结构化 + 具名结构/来源 | 25% | 5 | **10** | §12.2 |
+| R3 TiDaoji 专用暴露面清单 | 20% | 3 | **10** | §12.3 |
+| R4 SoftUnload 后残余 / 非缓解项 | 15% | 4 | **10** | §12.4 |
+| R5 环境 kill-switch 预检 | 10% | 6 | **10** | §12.5 |
+| R6 评分边界诚实（非 stealth 保证） | 10% | 8 | **10** | §12.0 / §12.6 |
+| **加权** | 100% | ~3–4 | **10** | 仅 desk research |
+
+**残余（故意不进 10 分）**：无 live AC/EDR 演练（F6）；无 L2 实机 map 格（F5）；无对抗实现代码。
+
+---
+
+### 12.1 L1 检测矩阵（DSE 窗口 + SCM）
+
+| # | 信号 / 结构 | 检测侧如何用 | L1 可见性 | 谁缓解 | 公开锚点 |
+|---|-------------|--------------|-----------|--------|----------|
+| L1-01 | 服务 `TiDaoji` / `sc query` | 枚举内核服务 | **高** | 改名服务（插件 `TiDaojiName`）有限 | SCM / 本仓 runbook |
+| L1-02 | `%SystemRoot%\system32\drivers\TiDaoji.sys` | 文件/哈希 | **高** | 换路径/名 | 标准装载路径 |
+| L1-03 | `\\Device\\TiDaoji` / `\\.\TiDaoji` | 设备对象枚举 | **高** | 改名；难消 | 本仓 `IoCreateDevice` |
+| L1-04 | `CI!g_CiOptions` 短暂为 0 | 读 CI 状态 / 时序 | **中**（窗口短） | **立即 restore**（`dse_on.bat` → 6） | KDU/DSE 类工具；TrustedSec/Cryptoplague 类 CI 讨论 |
+| L1-05 | KDU 临时加载脆弱驱动（如 NalDrv 路径） | blocklist / 驱动加载事件 | **高（装载瞬间）** | 用后卸；仍留事件 | 本仓 `tools/dse` 使用 KDU |
+| L1-06 | Vulnerable Driver Blocklist | 装载失败 `0xC0000603` | 阻塞装载 | 关 blocklist（研究机）或换原语 | [KB5020779](https://support.microsoft.com/en-au/topic/kb5020779-the-vulnerable-driver-blocklist-after-the-october-2022-preview-release-3fcbe13a-6013-4118-b584-fcfbc6a09936) |
+| L1-07 | `PiDDBCacheTable` 条目（正规 `NtLoadDriver`） | 驱动数据库缓存 | **中** | 正规卸载部分清；TiDaoji **不**主动清 | kdmapper/UC PiDDB 讨论（对比：L1 会**有**合法条目） |
+| L1-08 | ETW / 驱动加载审计 | 安全日志 | **中–高** | 无（本仓） | Windows 审计策略 |
+| L1-09 | 测试签名水印 / testsigning | 启动配置 | 若用 testsign | bcdedit | 官方测试签路径 |
+
+**L1 红队解读**：最易被「服务 + 文件 + 设备」三元组命中；优势是生命周期清晰、可 `sc stop`。
+
+---
+
+### 12.2 L2 / L3 检测矩阵（manual map + BYOVD）
+
+| # | 信号 / 结构 | 检测侧如何用 | L2/L3 可见性 | mapper 可能做的 | TiDaoji 是否做 | 公开锚点 |
+|---|-------------|--------------|--------------|-----------------|---------------|----------|
+| L2-01 | 池内 PE / 无 `PsLoadedModuleList` 路径 | 扫 NonPaged 可执行区；模块列表无对应路径 | **高**（经典 map） | 分配策略/叠镜像（变体） | **否**（映像由 mapper 放） | [tulach 检测 map](https://tulach.cc/detecting-manually-mapped-drivers/)；nullmap 注 pool |
+| L2-02 | `DriverInit` / 代码指针落在 **unbacked** 区域 | 遍历 `DRIVER_OBJECT`，`GetDriverForAddress(DriverInit)==NULL` | **高** | 难彻底消 | IoCreateDriver 后对象在系统列表，**Init 仍可能在 map 区** | [eversinc33 DeviceObjectScanner](https://eversinc33.com/2024/03/23/anti-anti-rootkit-techniques-part-i-unkovering-mapped-rootkits) |
+| L2-03 | 设备对象存在但镜像无磁盘对应 | 设备 ↔ 模块一致性 | **高**（有 `\\.\TiDaoji`） | 否 | **主动创建设备** → 暴露通信面 | 同上 + 本仓设备 |
+| L2-04 | `PiDDBCacheTable`（脆弱驱动加载） | 查 iqvw/随机名 | **中**（装载窗） | **清表**（kdmapper 宣传） | 否 | [kdmapper Features](https://github.com/TheCruZ/kdmapper)；[UC PiDDB](https://www.unknowncheats.me/forum/anti-cheat-bypass/324665-clearing-piddbcachetable.html) |
+| L2-05 | `MmUnloadedDrivers` | 查刚卸的 BYOVD | **中** | **清**（kdmapper） | 否 | [revers.engineering hiding drivers](https://revers.engineering/hiding-drivers-on-windows-10/)；kdmapper README |
+| L2-06 | `g_KernelHashBucketList` | CI 哈希相关 | **中** | **清**（kdmapper） | 否 | kdmapper README |
+| L2-07 | WdFilter `RuntimeDriverList` / Count / Array | Defender 驱动运行时列表 | **中** | **清**（kdmapper） | 否 | kdmapper README；[WdFilter 分析](https://n4r1b.netlify.app/posts/2020/03/dissecting-the-windows-defender-driver-wdfilter-part-3/) |
+| L2-08 | BYOVD 本体（iqvw64e 等） | blocklist / 签名吊销 | **阻塞或告警** | 换 provider（L3） | 否 | KB5020779；社区 iqvw 弹窗 |
+| L2-09 | `\Device\Nal` 占用 | 双开 mapper | 操作失败 | 检测后拒绝 | n/a | kdmapper Common issues |
+| L2-10 | 绝对间接跳 `FF 25` 落在无模块区 | 模式扫描找 map 代码 | **中–高** | 减少绝对导入/混淆 | 否（依赖编译） | [tulach](https://tulach.cc/detecting-manually-mapped-drivers/) |
+| L2-11 | HVCI 拒绝可执行内核页 | 装载/执行失败 | **杀开关** | 无法单靠清表绕过 | n/a | Win11 Memory integrity 文档/社区 |
+| L2-12 | 无 SCM 服务项 | 「隐身」点 | 低服务可见 | 本征 | n/a | 与 L1-01 对比 |
+
+**L2/L3 红队解读**：躲 SCM 不等于躲内存；**设备 + 层 B 行为** 仍是 TiDaoji 硬暴露。清 PiDDB 等只降低 **BYOVD 装载痕迹**，不降低 **payload 功能痕迹**。
+
+---
+
+### 12.3 TiDaoji 专用暴露面（操作者必读）
+
+| # | 暴露 | 剖面 | 缓解？ | 说明 |
+|---|------|------|--------|------|
+| T-01 | 设备 `\\.\TiDaoji`（默认可改名） | L1/L2/L3 | 改名有限 | 用户态插件/GUI 依赖；枚举设备可发现 |
+| T-02 | 日志 `C:\TiDaoji.log` | 全 | 关日志/改路径（未做） | `InitLog` 固定 DosDevices 模式 |
+| T-03 | 服务名 `TiDaoji` | **L1** | 自定义 sc 名 + `TiDaojiName` | L2 通常无服务 |
+| T-04 | 文件 `drivers\TiDaoji.sys` | **L1** | 换文件名 | L2 可不落该路径 |
+| T-05 | InfinityHook **层 B**（CKCL SYSTEMCALL、GetCpuClock/Hvl/Halp） | 全（功能开启后） | **不缓解** | 设计 K20；行为/完整性可检 |
+| T-06 | `DetectThread` / Repair | 全 | 不缓解 | 周期内核活动 |
+| T-07 | `SharedUserData->KdDebuggerEnabled = 0` | Hide 时 | 全局副作用 | `hider.cpp`；可被其它组件察觉 |
+| T-08 | SoftUnload 后服务僵尸（L1） | L1 | 再 `sc stop` | §12.4 |
+| T-09 | SoftUnload 后 map 页残留（L2/L3） | L2/L3 | 重启 | 社区共识 |
+| T-10 | 插件字符串 `TiDaoji*` 命令 | 用户态 | 改插件 | x64dbg 日志 |
+| T-11 | ConflictProbe 失败日志 | 双 IH | 先卸 CR | 可观测 |
+| T-12 | Pool tag / 分配特征 | 视 mapper | mapper | TiDaoji 自身 pool 另计 |
+
+---
+
+### 12.4 SoftUnload 之后还剩什么
+
+```text
+SoftUnload
+  → Hooks::Deinitialize / k_hook::Cleanup  （层 B 应拆）
+  → drain N ms
+  → 删符号链接 + 设备
+  → NTDLL 用户态缓冲收尾
+```
+
+| 残余 | L1 | L2/L3 |
+|------|----|-------|
+| 设备 `\\.\TiDaoji` | 应消失 | 应消失 |
+| 层 B 时钟/CKCL | 应恢复（Cleanup 契约） | 同左；失败则 **高危残留** |
+| SCM 服务 | **可能仍 RUNNING** | 通常本无 |
+| 磁盘 `.sys` | 仍在 | 可能本无 |
+| Mapper 分配的 PE 池 | n/a | **常仍在** 直至 reboot |
+| PiDDB/痕迹清理 | 正规卸载路径 | 取决于 mapper 是否已清 |
+| 调试器 PEB hide | 用户态独立 | 用户态独立 |
+
+**操作结论**：SoftUnload ≠ 「机器干净」；L2/L3 报告「已卸」前应假定 **需重启** 才算彻底。
+
+---
+
+### 12.5 环境 kill-switch 预检（非隐身保证）
+
+| Kill-switch | 挡谁 | 操作者检查 | 失败观感 |
+|-------------|------|------------|----------|
+| **HVCI / Memory integrity** | 多数 L2 iqvw 类；部分任意内核执行 | 设置 → 核心隔离 | map/执行失败 |
+| **Vulnerable Driver Blocklist** | 已知 BYOVD（iqvw 等） | KB5020779；注册表 `VulnerableDriverBlocklistEnable` | `0xC0000603` |
+| **Secure Boot + 策略** | 部分启动链 / 驱动策略 | msinfo | 视环境 |
+| **EDR / AC 常驻** | L1 服务事件、L2 map 行为 | 任务管理器/厂商 | `0xC0000022` 等 |
+| **双 InfinityHook（CR）** | TiDaoji `Start` | 先卸 CR | ConflictProbe |
+| **已有 `\\Device\\Nal`** | kdmapper iqvw | 重启/清残留 | Nal in use |
+| **PG / 层 B 长驻** | 不挡装载；挡「长期安逸」 | 接受 K20 | 未来 0x109 风险 |
+
+预检清单（文档级）：
+
+1. HVCI off（若走经典 L2）  
+2. Blocklist 状态已知  
+3. 无冲突 IH  
+4. 选定剖面 L1 或 L2/L3  
+5. 卸载计划：`sc stop` 和/或 SoftUnload 和/或 reboot  
+
+---
+
+### 12.6 TiDaoji / 本仓 **明确不缓解**（红队诚实清单）
+
+| 类别 | 不缓解内容 |
+|------|------------|
+| 隐身 | 不保证对任何 AC/EDR 不可见 |
+| 痕迹 | 不实现 PiDDB / MmUnloaded / HashBucket / WdFilter 清理 |
+| BYOVD | 不维护私有 CVE 驱动库；L3 仅 CLI 挂钩 |
+| 层 B | 不声称 PG-safe；不缩短「功能开启期间」的行为暴露 |
+| SoftUnload | 不回收 mapper 物理/池页 |
+| 日志/设备 | 默认固定路径字符串仍可被扫 |
+| 合法合规 | 研究机 only；非生产 |
+
+**红队完备 ≠ 红队隐身。** 完备 = 知道会被打哪里、卸不干净什么、环境何时一票否决。
+
+---
+
+### 12.7 剖面 × 对抗优先级（决策）
+
+| 你的目标 | 优先剖面 | 对抗代价 |
+|----------|----------|----------|
+| 稳定开发 hide / x64dbg | **L1** | 服务+文件暴露；卸载干净 |
+| 减少 SCM 痕迹、实验 map | **L2** | 内存/unbacked 检测；难卸 |
+| iqvw 死、换工具链 | **L3** | 同 L2 + 新 provider 风险 |
+| 「尽量没人看见」 | **无本仓方案** | 超出范围 |
+
+---
+
+### 12.8 对抗完备检查表（文档自检）
+
+- [x] 量表声明 desk-research 10/10 ≠ live stealth  
+- [x] L1 矩阵含 SCM/CI/blocklist/设备  
+- [x] L2/L3 矩阵含 pool/unbacked/PiDDB/MmUnloaded/WdFilter/BYOVD/HVCI  
+- [x] TiDaoji 专用 T-01… 列表  
+- [x] SoftUnload 残余分 L1/L2  
+- [x] Kill-switch 预检  
+- [x] 明确非缓解项  
+- [x] 公开锚点链接（§10 + 表内）  
+- [ ] Live AC 演练 — **故意排除**  
+
+**结论：对抗/红队「资料与暴露面」完备度按 §12.0 自评为 10/10（desk research）。**

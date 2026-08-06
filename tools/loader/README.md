@@ -1,7 +1,8 @@
 # TiDaoji optional loaders (L1 / L2 / L3)
 
-**Full research note (no live L2/L3 in this rev):**  
-`docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md` (Rev 2)
+**Full research note (no live L2/L3 AC lab):**  
+`docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md` (Rev 3)  
+Adversarial desk-research chapter: **§12 对抗/红队完备** (rubric = documentation 10/10, not stealth).
 
 | Script | Profile | Needs |
 |--------|---------|--------|

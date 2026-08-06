@@ -5,7 +5,7 @@
 | **PR** | PR5 |
 | **日期** | 2026-08-07 |
 | **画像** | **A only**（K20）：临时放开 **DSE** 以便装载未签名 `TiDaoji.sys`；**PG 全程开启** |
-| **关联** | 设计 `docs/2026-08-06-tidaoji-infinityhook-design.md`；研究 `docs/2026-08-06-infinityhook-lineage-newos-research.md` |
+| **关联** | 设计 `docs/2026-08-06-tidaoji-infinityhook-design.md`；研究 `docs/2026-08-06-infinityhook-lineage-newos-research.md`；装载剖面/对抗矩阵 `docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md` §12 |
 | **驱动设备** | `\\.\TiDaoji`（服务名默认 `TiDaoji`；可改，见下） |
 
 > **NOT PG-safe。** InfinityHook 层 B（CKCL / GetCpuClock / Hvl / Halp）在 `sc start` 成功后 **long-lived** 直至卸载驱动。  

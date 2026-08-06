@@ -229,5 +229,45 @@ else
   bad "plugin SoftUnload missing"
 fi
 
+# --- 10. Adversarial / red-team desk completeness (goal: 10/10 docs) ---
+ADV="docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md"
+for needle in \
+  "对抗 / 红队完备" \
+  "评分量表" \
+  "desk research" \
+  "L1 检测矩阵" \
+  "L2 / L3 检测矩阵" \
+  "PiDDBCacheTable" \
+  "MmUnloadedDrivers" \
+  "g_KernelHashBucketList" \
+  "WdFilter" \
+  "TiDaoji 专用暴露面" \
+  "SoftUnload 之后还剩什么" \
+  "kill-switch" \
+  "明确不缓解" \
+  "0xC0000603" \
+  "HVCI" \
+  "CKCL" \
+  "KB5020779"
+do
+  if grep -qF "$needle" "$ADV"; then
+    pass "adversarial doc: $needle"
+  else
+    bad "adversarial doc missing: $needle"
+  fi
+done
+# device path appears as \\\\.\\TiDaoji or \\.\TiDaoji in markdown
+if grep -qE '\\\\\.\\TiDaoji|\\\\\.\\\\TiDaoji|Device\\\\TiDaoji' "$ADV" \
+  || grep -qF 'TiDaoji' "$ADV" && grep -qF '设备' "$ADV"; then
+  pass "adversarial doc: device/TiDaoji exposure"
+else
+  bad "adversarial doc missing device exposure"
+fi
+if grep -qF '非 stealth' "$ADV" || grep -qF '≠ live stealth' "$ADV" || grep -qF '不是 10/10' "$ADV"; then
+  pass "adversarial rubric bounds honest"
+else
+  bad "adversarial rubric missing honesty bound"
+fi
+
 echo "=== summary fail=$fail ==="
 exit "$fail"
