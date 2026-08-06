@@ -19,8 +19,8 @@ jobs:
 
     - name: Build user-mode components
       run: |
-        msbuild.exe ${{ github.event.repository.name }}.sln /m /verbosity:minimal "/t:TitanHideGUI:Rebuild;TitanHideTest:Rebuild;TitanHide_x64dbg:Rebuild;TitanHide_TitanEngine:Rebuild" /p:Configuration=Release /p:Platform=x64
-        msbuild.exe ${{ github.event.repository.name }}.sln /m /verbosity:minimal "/t:TitanHideGUI:Rebuild;TitanHideTest:Rebuild;TitanHide_x64dbg:Rebuild;TitanHide_OllyDbg:Rebuild;TitanHide_TitanEngine:Rebuild" /p:Configuration=Release /p:Platform=Win32
+        msbuild.exe TiDaoji.sln /m /verbosity:minimal "/t:TiDaojiGUI:Rebuild;TiDaojiTest:Rebuild;TiDaoji_x64dbg:Rebuild;TiDaoji_TitanEngine:Rebuild" /p:Configuration=Release /p:Platform=x64
+        msbuild.exe TiDaoji.sln /m /verbosity:minimal "/t:TiDaojiGUI:Rebuild;TiDaojiTest:Rebuild;TiDaoji_x64dbg:Rebuild;TiDaoji_OllyDbg:Rebuild;TiDaoji_TitanEngine:Rebuild" /p:Configuration=Release /p:Platform=Win32
 
     - name: Install Visual Studio 2019 Build Tools
       shell: pwsh
@@ -120,8 +120,8 @@ jobs:
         $msbuild = 'C:\BuildTools2019\MSBuild\Current\Bin\MSBuild.exe'
         $kitsRoot = "${env:ProgramFiles(x86)}\Windows Kits\10"
         $commonArguments = @(
-          '${{ github.event.repository.name }}.sln',
-          '/m', '/verbosity:minimal', '/t:TitanHide:Rebuild',
+          'TiDaoji.sln',
+          '/m', '/verbosity:minimal', '/t:TiDaoji:Rebuild',
           '/p:Configuration=Release',
           '/p:WindowsTargetPlatformVersion=10.0.19041.0',
           "/p:DriverSignToolPath=$kitsRoot\bin\10.0.19041.0\x86\",
@@ -164,8 +164,8 @@ jobs:
             [BitConverter]::ToUInt16($bytes, $optionalHeader + 50))
         }
 
-        $x86Driver = 'Release\TitanHide.sys'
-        $x64Driver = 'x64\Release\TitanHide.sys'
+        $x86Driver = 'Release\TiDaoji.sys'
+        $x64Driver = 'x64\Release\TiDaoji.sys'
         if ((Get-PeMachine $x86Driver) -ne 0x014c) { throw 'The x86 driver has the wrong machine type' }
         if ((Get-PeMachine $x64Driver) -ne 0x8664) { throw 'The x64 driver has the wrong machine type' }
         if ((Get-PeSubsystemVersion $x86Driver) -gt [Version]'6.1') { throw 'The x86 driver requires a post-Windows 7 subsystem' }
@@ -173,8 +173,8 @@ jobs:
 
         & .\release.bat
         foreach ($architecture in @('x32', 'x64')) {
-          if (-not (Test-Path "bin\$architecture\TitanHide.sys")) { throw "The packaged $architecture driver is missing" }
-          if (-not (Test-Path "bin\$architecture\TitanHide.cer")) { throw "The packaged $architecture test certificate is missing" }
+          if (-not (Test-Path "bin\$architecture\TiDaoji.sys")) { throw "The packaged $architecture driver is missing" }
+          if (-not (Test-Path "bin\$architecture\TiDaoji.cer")) { throw "The packaged $architecture test certificate is missing" }
         }
 
     - uses: actions/upload-artifact@v4

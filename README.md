@@ -1,73 +1,71 @@
-**Do not come here and open issues about problems with installation, crashes with bug check 0x109: CRITICAL_STRUCTURE_CORRUPTION or questions on how to disable PatchGuard. I will permanently ban you from the issue tracker. If you don't know how to properly install the tool you don't know enough to use it responsibly and you should use something else like [ScyllaHide](https://github.com/x64dbg/ScyllaHide).
+# TiDaoji
 
-# Overview
+> **⚠️ NOT PG-SAFE (PR1)** — 当前构建仍是 **SSDT + hooklib** 写路径。  
+> **禁止**在最终「DSU 装载 → 立即 restore DSE → 长时间运行」工作流上把它当完成品。  
+> InfinityHook 引擎迁移见 `docs/2026-08-06-tidaoji-infinityhook-design.md`（PR2/PR3）。  
+> 经典风险：`0x109 CRITICAL_STRUCTURE_CORRUPTION`（长期挂 SSDT / 未关 PG）。
 
-TitanHide is a driver intended to hide debuggers from certain processes. The driver hooks various Nt* kernel functions (using SSDT table hooks) and modifies the return values of the original functions. To hide a process, you must pass a simple structure with a ProcessID and the hiding option(s) to enable, to the driver. The internal API is designed to add hooks with little effort, which means adding features is really easy.
+TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉并 **全量改名**，用于在特定进程上隐藏调试器痕迹。  
+通过 hook 多个 `Nt*`（当前仍为 SSDT）并改写返回值；向驱动写入 `HIDE_INFO`（PID + Type 位掩码）启用保护。
 
-The idea for this project was thought of together with cypher, shoutout man!
+## 身份面（PR1）
 
-# Features
+| 面 | 名称 |
+|----|------|
+| 驱动文件 | `TiDaoji.sys` |
+| 服务名 | `TiDaoji`（= `\Device\TiDaoji` / `\\.\TiDaoji`） |
+| 日志 | `C:\TiDaoji.log` |
+| x64dbg 插件 | `TiDaoji.dp64`，命令 `TiDaoji` / `TiDaojiUnhide` / `TiDaojiOptions` / `TiDaojiName` |
 
-- ProcessDebugFlags (NtQueryInformationProcess)
-- ProcessDebugPort (NtQueryInformationProcess)
-- ProcessDebugObjectHandle (NtQueryInformationProcess)
+> 用户口中的「管道名」在此实现为 **设备符号链接**（`\DosDevices\TiDaoji`），**不是** Windows Named Pipe。
+
+## Features
+
+- ProcessDebugFlags / ProcessDebugPort / ProcessDebugObjectHandle
 - DebugObject (NtQueryObject)
-- SystemKernelDebuggerInformation (NtQuerySystemInformation)
-- SystemDebugControl (NtSystemDebugControl)
-- NtClose (STATUS_INVALID_HANDLE/STATUS_HANDLE_NOT_CLOSABLE exceptions)
-- ThreadHideFromDebugger (NtSetInformationThread)
-- Protect DRx (HW BPs) (NtGetContextThread/NtSetContextThread)
+- SystemKernelDebuggerInformation / SystemDebugControl
+- NtClose 异常路径
+- ThreadHideFromDebugger
+- Protect DRx (NtGetContextThread / NtSetContextThread)
+- SystemFirmwareVMScrub (`HideNtSystemVMInformation`, BIT 11) — 来自 lityrgia 选择性合并
 
-# Test environments
+## Compiling
 
-- Windows 10 x64 & x86
-- Windows 8.1 x64 & x86
-- Windows 7 x64 & x86 (SP1)
-- Windows XP x86 (SP3)
-- Windows XP x64 (SP1)
+1. Visual Studio 2022 + WDK  
+2. 打开 `TiDaoji.sln` 编译  
 
-# Compiling
+## Installation（测试机 / 研究用途）
 
-1. Install Visual Studio 2022.
-2. Install the [WDK10](https://go.microsoft.com/fwlink/?linkid=2128854)/[WDK8](https://go.microsoft.com/fwlink/p/?LinkID=324284)/[WDK7](https://www.microsoft.com/download/confirmation.aspx?id=11800).
-3. Open `TitanHide.sln` and hit compile!
-
-# Requirements
-
-**You need to disable PatchGuard and driver signing enforcement (DSE) before using this driver.**
-
-To disable PatchGuard you can try one of the following projects:
-
-- [EfiGuard](https://github.com/Mattiwatti/EfiGuard)
-- [SandboxBootkit](https://github.com/thesecretclub/SandboxBootkit)
-- [Shark](https://github.com/9176324/Shark)
-- [UPGDSED](https://github.com/hfiref0x/UPGDSED) (archived in 2019)
-
-To load the driver you can enable test signing:
-
-```sh
-bcdedit /set testsigning on
+```bat
+copy TiDaoji.sys %systemroot%\system32\drivers\
+sc create TiDaoji binPath= %systemroot%\system32\drivers\TiDaoji.sys type= kernel
+sc start TiDaoji
+sc query TiDaoji
 ```
 
-# Installation
+或：`install_driver.bat`（见仓库根目录）。
 
-1. Copy `TitanHide.sys` to `%systemroot%\system32\drivers`.
-2. Run the command `sc create TitanHide binPath= %systemroot%\system32\drivers\TitanHide.sys type= kernel` to create the TitanHide service.
-3. Run the command `sc start TitanHide` to start the TitanHide service.
-4. Run the command `sc query TitanHide` to check if TitanHide is running.
+检查：DebugView 或 `C:\TiDaoji.log`。
 
-To check if TitanHide is working correctly, use [DebugView](https://technet.microsoft.com/en-us/sysinternals/debugview.aspx) or check `C:\TitanHide.log`.
+### 服务名再变体（反字符串检测）
 
-## Hiding
-
-For VMProtect 3.9.4 and above you need to change the service name to something else. For example `sc create NotTitanHide`, which will bypass their latest 'detection'. After changing the service name you will need to configure the plugin with the following command in x64dbg:
-
-```
-TitanHideName NotTitanHide
+```bat
+sc create NotTiDaoji binPath= %systemroot%\system32\drivers\TiDaoji.sys type= kernel
 ```
 
-# Remarks
+x64dbg：
 
-- When using x64dbg, you can use the TitanHide plugin (available on the download page).
-- **NEVER RUN THIS DRIVER ON A PRODUCTION SYSTEM, ALWAYS USE A VM!**
+```
+TiDaojiName NotTiDaoji
+```
 
+## DSU 工作流（设计目标；**PR1 尚未换引擎**）
+
+画像 **A（用户已拍板）**：仅临时放开 **DSE** 装载，装完立即 restore；**PG 保持开启**。  
+在 PR3（InfinityHook 接线）之前，**不要**在此工作流下长时间跑 PR1 二进制。
+
+## Remarks
+
+- 与 CR 等其它 InfinityHook 实例 **互斥**（PR3 起硬失败）。  
+- **Never run on production; always VM.**  
+- Upstream: original TitanHide project by mrexodia.
