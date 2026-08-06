@@ -1,34 +1,53 @@
 # TiDaoji × Cheat Engine
 
-| 组件 | 作用 |
-|------|------|
-| `TiDaoji.lua` | CE autorun：菜单 + 面板 UI + `onOpenProcess` 自动 Hide |
-| `../tidaoji_cli.exe` | 写 `\\.\TiDaoji` 的 CLI（Lua 调用） |
-| `TiDaojiGUI.exe` | 独立 Win32 UI（不依赖 CE） |
+**可以。** CE 官方支持原生 DLL 插件（与 x64dbg 的 `.dp64` 同类），SDK 导出：
 
-> **需要** 已加载 `TiDaoji.sys`（L1 KDU/`sc` 等）。**NOT PG-safe。**
+`CEPlugin_GetVersion` / `CEPlugin_InitializePlugin` / `CEPlugin_DisablePlugin`
 
-## 安装
+| 组件 | 架构 | 作用 |
+|------|------|------|
+| **`plugin/TiDaojiCE64.dll`** | **x64 CE** | **原生插件**（主菜单 + ProcessWatch AutoHide） |
+| **`plugin/TiDaojiCE32.dll`** | **x86 CE** | 同上，双架构 |
+| `TiDaoji.lua` | 任意 | autorun 窗体 UI（可选，面板勾选 Type） |
+| `../tidaoji_cli.exe` | x64 | Lua/脚本 CLI |
+| `TiDaojiGUI.exe` | x64 | 独立 Win32 UI |
+
+> **需要** 已加载 `TiDaoji.sys`。**NOT PG-safe。** 本机 CE 7.6 为 **64 位**，日常用 `TiDaojiCE64.dll`。
+
+## 原生插件（推荐，对齐 x64dbg）
 
 ```bat
-:: 1) 编译 CLI（win-master 示例）
-cd /d D:\src\TiDaoji\tools
-cl /O2 /EHsc /I.. /Fe:tidaoji_cli.exe tidaoji_cli.cpp
-
-:: 2) 拷到 CE autorun（路径按本机 CE 安装改）
-copy /Y TiDaoji.lua            "D:\tools\CE76\autorun\"
-copy /Y tidaoji_cli.exe        "D:\tools\CE76\autorun\"
-
-:: 3) 重启 Cheat Engine（建议管理员，便于 CreateFile 设备）
+cd /d D:\src\TiDaoji\tools\ce\plugin
+build_ce_plugin.bat
+deploy_ce_plugin.bat
 ```
 
-启动后菜单栏应有 **TiDaoji**：
+1. 重启 **Cheat Engine**（管理员更稳）
+2. **Edit → Plugins**（或设置里插件列表）→ 添加  
+   `D:\tools\CE76\plugins\TiDaojiCE64.dll` → Enable  
+3. 主菜单出现：
 
-- Show panel… — 勾选 Type、Hide/Unhide/SoftUnload
-- Hide / Unhide opened process
-- Driver status
+| 菜单 | 快捷键 | 作用 |
+|------|--------|------|
+| TiDaoji: Hide opened process | Ctrl+Shift+H | HidePid（`OpenedProcessID`） |
+| TiDaoji: Unhide opened process | Ctrl+Shift+U | UnhidePid |
+| TiDaoji: Driver status | | 探测 `\\.\TiDaoji` |
+| TiDaoji: SoftUnload | | L2/L3 卸载 |
+| TiDaoji: Toggle AutoHide | | 进程创建时自动 hide |
 
-打开目标进程时，若勾选 **Auto Hide**，会走 `onOpenProcess` → `tidaoji_cli hide <pid>`。
+配置 ini（DLL 旁）：`TiDaojiCE.ini` → `[TiDaoji] DriverName=` `Type=` `AutoHide=`
+
+源码：`tools/ce/plugin/TiDaojiCE.cpp`（SDK：`plugin/sdk/cepluginsdk.h`）。
+
+## Lua 面板（可选）
+
+```bat
+copy /Y TiDaoji.lua            "D:\tools\CE76\autorun\"
+copy /Y tidaoji_cli.exe        "D:\tools\CE76\autorun\"
+```
+
+- Show panel… — 勾选 Type、Hide/Unhide/SoftUnload  
+- 与原生插件可并存；Hide 都走同一驱动
 
 ## CLI 手测
 

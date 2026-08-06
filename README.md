@@ -67,10 +67,18 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 Settings UI：Type 勾选、Driver 名、Probe 设备、Apply&Hide、SoftUnload。  
 自动：系统断点 → hide；结束调试 → unhide。
 
-### Cheat Engine
+### Cheat Engine（原生插件 + 可选 Lua）
 
-见 **`tools/ce/README.md`**：`TiDaoji.lua`（CE 内置窗体 UI）+ `tidaoji_cli.exe`。  
-CE 打开进程时可自动 `HidePid`；与 `TiDaojiGUI` / x64dbg 共用驱动。
+**支持原生 DLL 插件**（与 x64dbg 同类，CE Plugin SDK）：
+
+| 产物 | 架构 | 部署 |
+|------|------|------|
+| `tools/ce/plugin/out/TiDaojiCE64.dll` | x64 CE | `CE\plugins\` → Edit→Plugins 启用 |
+| `tools/ce/plugin/out/TiDaojiCE32.dll` | x86 CE | 同上 |
+
+菜单：Hide / Unhide / Status / SoftUnload / Toggle AutoHide；ProcessWatch 可 AutoHide。  
+构建：`tools\ce\plugin\build_ce_plugin.bat` + `deploy_ce_plugin.bat`。  
+可选 Lua 面板：`tools/ce/TiDaoji.lua` + `tidaoji_cli.exe`。详见 **`tools/ce/README.md`**。
 
 ### OllyDbg / TitanEngine（PR4 深度打磨）
 
