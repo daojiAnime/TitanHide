@@ -124,7 +124,14 @@ TiDaojiName NotTiDaoji
 `sc start` → InfinityHook `Start`（层 B 生效）→ **立即 restore DSE** → Hide。  
 Restore **不**卸载驱动、**不**撤销层 B；hide 依赖仍存活的 IH 改写——有意取舍，不是“系统已干净”。
 
-快捷：`install_driver.bat`（须已在 DSE 窗口内；start 后立刻 restore）。
+快捷（仓库内 DSE 工具，**已 git 跟踪**）：
+
+```bat
+tools\dse\load_tidaoji_profile_a.bat
+REM 或: tools\dse\dse_off.bat  ^&  install_driver.bat  ^&  tools\dse\dse_on.bat
+```
+
+详见 `tools/dse/README.md`（含 KDU 哈希 / NOTICE）。
 
 ## Remarks
 

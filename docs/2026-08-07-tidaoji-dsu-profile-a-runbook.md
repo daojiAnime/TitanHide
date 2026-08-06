@@ -28,18 +28,26 @@
 
 ---
 
-## 1. 工具占位（本机填写）
+## 1. 仓库内 DSE 工具（已 git 跟踪）
 
-| 角色 | 本机候选 / 填空 | 用途 |
-|------|-----------------|------|
-| DSE 窗口工具 | **win-master 已验证**：`D:\tools\kdu\kdu.exe`（亦可用 DisabledDSE/DHS） | 短暂允许未签名驱动装载 |
-| 进入 DSE 窗口 | `kdu.exe -dse 0` | 装载前 |
-| restore DSE | `kdu.exe -dse 6`（该机 g_CiOptions 常态为 6） | **start 成功后立即** |
-| 验证 DSE 已恢复 | `kdu -dse` 读回 / 再装未签名驱动应 577 | **只证 DSE，不证 hook 已卸** |
-| 内核日志 | DebugView 或 `C:\TiDaoji.log` | `[TIDAOJI]` / `[TIDAOJI][IH]` |
-| 用户态 | x64dbg + `TiDaoji.dp64` 或 `TiDaojiGUI.exe` | 写 `HIDE_INFO` |
+| 路径 | 用途 |
+|------|------|
+| `tools/dse/kdu/kdu.exe` + `drv64.dll` | **主路径**（win-master 验证） |
+| `tools/dse/DisabledDSE.exe` | 备选 |
+| `tools/dse/dse_off.bat` | DSE → 0 |
+| `tools/dse/dse_on.bat` | DSE → 6（可用 `DSE_ON_VALUE` 覆盖） |
+| `tools/dse/load_tidaoji_profile_a.bat` | 一键：off → install/start → on |
+| `tools/dse/README.md` / `NOTICE` | 哈希、许可、红线 |
 
-> 具体二进制路径因环境而异；**画像不因工具而改**。
+| 角色 | 命令 |
+|------|------|
+| 进入 DSE 窗口 | `tools\dse\dse_off.bat` 或 `kdu\kdu.exe -dse 0` |
+| restore DSE | `tools\dse\dse_on.bat`（默认 6） |
+| 验证 DSE 已恢复 | 再装未签名驱动应 577 / kdu 读回 |
+| 内核日志 | DebugView 或 `C:\TiDaoji.log` |
+| 用户态 | x64dbg `TiDaoji.dp64` / GUI |
+
+> **必须**用仓库内 `tools\dse\`，避免机器上散落的 `D:\tools\kdu` 漂移。
 
 ---
 
@@ -82,24 +90,32 @@ sc query type= driver state= all | findstr /i "CR Sak Infinity"
 ### 3.2 进入 DSE 窗口
 
 ```bat
-cd /d D:\tools\kdu
-kdu.exe -dse 0
-REM 期望：DSE flags ... new value to be written: 0
+cd /d <repo>\tools\dse
+dse_off.bat
+REM 等价: kdu\kdu.exe -dse 0
 ```
 
 ### 3.3 安装并启动
 
-**A. 脚本（仓库根）**
+**A. 一键（推荐）**
 
 ```bat
-install_driver.bat
+tools\dse\load_tidaoji_profile_a.bat
 ```
 
-**B. 手写**
+**B. 分步**
+
+```bat
+tools\dse\dse_off.bat
+install_driver.bat
+tools\dse\dse_on.bat
+```
+
+**C. 手写**
 
 ```bat
 copy /Y TiDaoji.sys %SystemRoot%\system32\drivers\TiDaoji.sys
-sc create TiDaoji binPath= %SystemRoot%\system32\drivers\TiDaoji.sys type= kernel
+sc create TiDaoji binPath= \??\%SystemRoot%\system32\drivers\TiDaoji.sys type= kernel
 sc start TiDaoji
 sc query TiDaoji
 ```
@@ -114,9 +130,9 @@ sc query TiDaoji
 ### 3.4 立即 restore DSE
 
 ```bat
-cd /d D:\tools\kdu
-kdu.exe -dse 6
-REM 期望：value: 0 -> 6
+cd /d <repo>\tools\dse
+dse_on.bat
+REM 等价: kdu\kdu.exe -dse 6
 ```
 
 **win-master 2026-08-07 实机记录**：start 后日志含 `InfinityHook hide armed` / `Hooks::Initialize armed`；`tools/tidaoji_smoke` 对 `\\.\TiDaoji` HidePid+UnhidePid 成功；DSE 已 restore 后服务仍 RUNNING。

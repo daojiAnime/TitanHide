@@ -193,5 +193,20 @@ else
   bad "TitanEngine polish incomplete"
 fi
 
+# --- 8. Vendored DSE lab tools (profile A) ---
+if [[ -f tools/dse/kdu/kdu.exe && -f tools/dse/kdu/drv64.dll \
+  && -f tools/dse/dse_off.bat && -f tools/dse/dse_on.bat \
+  && -f tools/dse/load_tidaoji_profile_a.bat && -f tools/dse/NOTICE ]]; then
+  pass "tools/dse KDU + scripts tracked"
+else
+  bad "tools/dse incomplete"
+fi
+if grep -qF 'tools/dse' docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md \
+  && grep -qF 'dse_off.bat' README.md; then
+  pass "docs/README point at tools/dse"
+else
+  bad "docs missing tools/dse links"
+fi
+
 echo "=== summary fail=$fail ==="
 exit "$fail"

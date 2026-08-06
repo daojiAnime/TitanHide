@@ -1,0 +1,3 @@
+tools/dse/**/*.exe binary
+tools/dse/**/*.dll binary
+tools/dse/kdu/** binary

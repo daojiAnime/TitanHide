@@ -1,0 +1,13 @@
+Third-party binaries under tools/dse/
+
+1) kdu/kdu.exe + kdu/drv64.dll
+   Source project: https://github.com/hfiref0x/KDU
+   Vendored for reproducible lab workflow (profile A temporary DSE).
+   License: see upstream repository LICENSE.
+   Use only on systems you own for research. Loads vulnerable helpers temporarily.
+
+2) DisabledDSE.exe
+   Lab helper binary tracked for alternate DSE window paths.
+   Prefer KDU scripts (dse_off.bat / dse_on.bat) as the verified path on win-master.
+
+TiDaoji authors do not provide warranty. NOT for production; NOT a PG disable tool.
