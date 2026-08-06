@@ -112,6 +112,10 @@ bool Hider::ProcessData(PVOID Buffer, ULONG Size)
                 EntrySet(FoundEntry, HideInfo[i].Type);
             }
 
+            // Clear shared KD flag so usermode KdDebuggerEnabled checks see "not attached".
+            // Global side effect (SharedUserData); matches lityrgia VMP anti-debug path.
+            SharedUserData->KdDebuggerEnabled = 0;
+
             // Use DKOM to disable HideThreadHideFromDebugger in any threads in the target process that already have this flag set
             if((HideInfo[i].Type & (ULONG)HideThreadHideFromDebugger) != 0 && CrossThreadFlagsOffset != 0)
             {

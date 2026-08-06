@@ -386,6 +386,97 @@ static NTSTATUS NTAPI HookNtQuerySystemInformation(
             }
             break;
         }
+        // From lityrgia: scrub VM vendor strings in firmware tables (anti-VM).
+        // Gated by HideNtSystemVMInformation. Minimal local struct (WDK may omit it).
+        case SystemFirmwareTableInformation:
+        {
+            if(!Hider::IsHidden(pid, HideNtSystemVMInformation))
+                break;
+
+            typedef struct _SYSTEM_FIRMWARE_TABLE_INFORMATION_TH
+            {
+                ULONG ProviderSignature;
+                ULONG Action;
+                ULONG TableID;
+                ULONG TableBufferLength;
+                UCHAR TableBuffer[1];
+            } SYSTEM_FIRMWARE_TABLE_INFORMATION_TH, *PSYSTEM_FIRMWARE_TABLE_INFORMATION_TH;
+
+            if(SystemInformationLength < FIELD_OFFSET(SYSTEM_FIRMWARE_TABLE_INFORMATION_TH, TableBuffer))
+                break;
+
+            __try
+            {
+                PSYSTEM_FIRMWARE_TABLE_INFORMATION_TH fti =
+                    (PSYSTEM_FIRMWARE_TABLE_INFORMATION_TH)SystemInformation;
+
+                ProbeForRead(fti, FIELD_OFFSET(SYSTEM_FIRMWARE_TABLE_INFORMATION_TH, TableBuffer), 1);
+
+                const ULONG bufLen = fti->TableBufferLength;
+                const ULONG headerSize = FIELD_OFFSET(SYSTEM_FIRMWARE_TABLE_INFORMATION_TH, TableBuffer);
+
+                if(bufLen == 0 || SystemInformationLength < headerSize + bufLen)
+                    break;
+
+                ProbeForWrite(fti->TableBuffer, bufLen, 1);
+
+                BACKUP_RETURNLENGTH();
+
+                static const struct
+                {
+                    const char* str;
+                    ULONG len;
+                } vmArtifacts[] =
+                {
+                    { "VMware", 6 },
+                    { "VMWARE", 6 },
+                    { "VirtualBox", 10 },
+                    { "vbox", 4 },
+                    { "VBOX", 4 },
+                    { "innotek", 7 },
+                    { "QEMU", 4 },
+                    { "qemu", 4 },
+                    { "bochs", 5 },
+                    { "BOCHS", 5 },
+                    { "Hyper-V", 7 },
+                    { "VIRT", 4 },
+                    { "Virtual", 7 },
+                    { "VIRTUAL", 7 },
+                    { "KVM", 3 },
+                };
+
+                UCHAR* buf = fti->TableBuffer;
+                bool patched = false;
+
+                for(ULONG i = 0; i < bufLen; i++)
+                {
+                    for(int s = 0; s < ARRAYSIZE(vmArtifacts); s++)
+                    {
+                        const ULONG slen = vmArtifacts[s].len;
+                        if(i + slen > bufLen)
+                            continue;
+                        if(RtlCompareMemory(buf + i, vmArtifacts[s].str, slen) == slen)
+                        {
+                            RtlFillMemory(buf + i, slen, '_');
+                            patched = true;
+                        }
+                    }
+                }
+
+                if(patched)
+                {
+                    Log("[TITANHIDE] SystemFirmwareTableInformation patched (provider=%.4s) by %d\r\n",
+                        (char*)&fti->ProviderSignature, pid);
+                }
+
+                RESTORE_RETURNLENGTH();
+            }
+            __except(EXCEPTION_EXECUTE_HANDLER)
+            {
+                ret = GetExceptionCode();
+            }
+            break;
+        }
         default:
             break;
         }
@@ -462,10 +553,34 @@ static NTSTATUS NTAPI HookNtQueryObject(
     if(ExGetPreviousMode() == KernelMode)
         return Undocumented::NtQueryObject(Handle, ObjectInformationClass, ObjectInformation, ObjectInformationLength, ReturnLength);
 
+    ULONG pid = (ULONG)(ULONG_PTR)PsGetCurrentProcessId();
+
+    // lityrgia: size probe for ObjectTypeInformation with zero-length buffer
+    // (VMP-style length discovery). Keep official contribution path below for real queries.
+    if(ObjectInformationClass == ObjectTypeInformation &&
+            Hider::IsHidden(pid, HideDebugObject) &&
+            (!ObjectInformation || ObjectInformationLength == 0))
+    {
+        // sizeof fixed header + "DebugObject" (incl. null) is a safe upper bound for length probe.
+        constexpr ULONG needed = sizeof(OBJECT_TYPE_INFORMATION) + sizeof(L"DebugObject");
+        __try
+        {
+            if(ReturnLength)
+            {
+                ProbeForWrite(ReturnLength, sizeof(ULONG), 1);
+                *ReturnLength = needed;
+            }
+        }
+        __except(EXCEPTION_EXECUTE_HANDLER)
+        {
+            NOTHING;
+        }
+        return STATUS_INFO_LENGTH_MISMATCH;
+    }
+
     NTSTATUS ret = Undocumented::NtQueryObject(Handle, ObjectInformationClass, ObjectInformation, ObjectInformationLength, ReturnLength);
     if(NT_SUCCESS(ret) && ObjectInformation)
     {
-        ULONG pid = (ULONG)(ULONG_PTR)PsGetCurrentProcessId();
         UNICODE_STRING DebugObject;
         RtlInitUnicodeString(&DebugObject, L"DebugObject");
         if(ObjectInformationClass == ObjectTypeInformation && Hider::IsHidden(pid, HideDebugObject))
@@ -546,10 +661,9 @@ static NTSTATUS NTAPI HookNtQueryInformationProcess(
 
     ULONG pid = Misc::GetProcessIDFromProcessHandle(ProcessHandle);
 
-    // Handle ProcessDebugObjectHandle early
+    // Handle ProcessDebugObjectHandle early (official STATUS_PORT_NOT_SET path +
+    // lityrgia length/alignment checks for VMP probes).
     if(ProcessInformationClass == ProcessDebugObjectHandle &&
-            ProcessInformation != nullptr &&
-            ProcessInformationLength == sizeof(HANDLE) &&
             Hider::IsHidden(pid, HideProcessDebugObjectHandle))
     {
         PEPROCESS Process;
@@ -566,16 +680,39 @@ static NTSTATUS NTAPI HookNtQueryInformationProcess(
 
         ObDereferenceObject(Process);
 
+        // Wrong size → STATUS_INFO_LENGTH_MISMATCH (lityrgia / VMP probes)
+        if(ProcessInformationLength != sizeof(HANDLE))
+        {
+            __try
+            {
+                if(ReturnLength != nullptr)
+                {
+                    ProbeForWrite(ReturnLength, sizeof(ULONG), 1);
+                    *ReturnLength = sizeof(HANDLE);
+                }
+            }
+            __except(EXCEPTION_EXECUTE_HANDLER)
+            {
+                return GetExceptionCode();
+            }
+            return STATUS_INFO_LENGTH_MISMATCH;
+        }
+
+        // Misaligned / null buffer → STATUS_DATATYPE_MISALIGNMENT
+        if(ProcessInformation == nullptr ||
+                ((ULONG_PTR)ProcessInformation & (__alignof(HANDLE) - 1)))
+            return STATUS_DATATYPE_MISALIGNMENT;
+
         __try
         {
             ProbeForWrite(ProcessInformation, sizeof(HANDLE), 4);
 
-            if (ReturnLength != nullptr)
+            if(ReturnLength != nullptr)
                 ProbeForWrite(ReturnLength, sizeof(ULONG), 1);
 
             *(PHANDLE)ProcessInformation = nullptr;
 
-            if (ReturnLength != nullptr)
+            if(ReturnLength != nullptr)
                 *ReturnLength = sizeof(HANDLE);
         }
         __except(EXCEPTION_EXECUTE_HANDLER)

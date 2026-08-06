@@ -20,6 +20,7 @@ static std::pair<int, HIDE_TYPE> gOptions[] =
     { IDC_CHK_NTGETCONTEXTTHREAD, HideNtGetContextThread },
     { IDC_CHK_NTSETCONTEXTTHREAD, HideNtSetContextThread },
     { IDC_CHK_NTSYSTEMDEBUGCONTROL, HideNtSystemDebugControl },
+    { IDC_CHK_NTSYSTEMVMINFORMATION, HideNtSystemVMInformation },
 };
 
 static ULONG GetTypeDword(HWND hwndDlg)
