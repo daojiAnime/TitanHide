@@ -4,7 +4,8 @@
 #include "pluginmain.h"
 
 #define PLUGIN_NAME "TiDaoji"
-#define PLUGIN_VERSION 1
+// PR4: help/status/unhideall + better errors; keep in sync with README plugin section
+#define PLUGIN_VERSION 2
 
 void TiDaojiInit(PLUG_INITSTRUCT* initStruct);
 void TiDaojiStop();

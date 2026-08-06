@@ -141,5 +141,34 @@ else
   bad "missing dual stack magic"
 fi
 
+# --- 6. PR4/PR5 userland + runbook (non-live) ---
+if grep -qF 'TiDaojiHelp' TiDaoji_x64dbg/plugin.cpp \
+  && grep -qF 'TiDaojiStatus' TiDaoji_x64dbg/plugin.cpp \
+  && grep -qF 'TiDaojiUnhideAll' TiDaoji_x64dbg/plugin.cpp \
+  && grep -qF 'PLUGIN_VERSION 2' TiDaoji_x64dbg/plugin.h; then
+  pass "PR4 plugin commands + v2"
+else
+  bad "PR4 plugin polish missing"
+fi
+if grep -qF 'WritePrivateProfileStringA("TiDaoji", "Type"' TiDaojiGUI/main.cpp \
+  && grep -qF 'GetPrivateProfileStringA("TiDaoji", "Type"' TiDaojiGUI/main.cpp; then
+  pass "PR4 GUI Type persistence"
+else
+  bad "PR4 GUI Type persistence missing"
+fi
+RB="docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md"
+if [[ -f "$RB" ]] && grep -qF '画像 A' "$RB" && grep -qF 'ConflictProbe' "$RB" \
+  && grep -qF 'restore' "$RB" && grep -qF 'NOT PG-safe' "$RB"; then
+  pass "PR5 DSU profile A runbook"
+else
+  bad "PR5 runbook missing or incomplete"
+fi
+if grep -qF '2026-08-07-tidaoji-dsu-profile-a-runbook' README.md \
+  && grep -qF 'TiDaojiHelp' README.md; then
+  pass "README links PR4/PR5"
+else
+  bad "README missing PR4/PR5 links"
+fi
+
 echo "=== summary fail=$fail ==="
 exit "$fail"

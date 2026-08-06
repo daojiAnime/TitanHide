@@ -819,26 +819,29 @@ void Deinitialize();
 | 3 | **PR6** 可选硬化 | 不挡 PR4/5 |
 | 4 | **实机验证 / 支持矩阵 / VMP 冒烟** | **最后**；填研究 §8；不挡 PR4/5 合入 |
 
-### PR4 — x64dbg 插件与 GUI 打磨 — **下一实施目标**
+### PR4 — x64dbg 插件与 GUI 打磨 — **done（与 PR5 同批）**
 
 - **Title**：`feat(plugin): TiDaoji commands and settings`
-- **Dependencies**：PR1 身份 + PR3 驱动契约（本地可用 `TiDaoji.sys` 即可联调；**不**要求矩阵全绿）
-- **Description**：  
-  - 命令、BridgeSetting、自动 hide 路径打磨  
-  - GUI 与驱动设备名/选项位一致  
-  - Olly/TE 按 Open Question #3（可后置）  
-- **DoD（PR4）**：插件命令可对运行中驱动写 `HIDE_INFO`；设置持久化；文档/帮助字符串与 PR1 名一致 — **不以 24H2/VMP 全矩阵为门禁**
+- **Branch**：`pr4-pr5/userland-runbook`
+- **Dependencies**：PR1 身份 + PR3 驱动契约（**不**要求矩阵全绿）
+- **交付**：  
+  - 插件 v2：`TiDaojiHelp` / `Status` / `UnhideAll`；Win32 错误；Type 位解码；PID 切换清 hide 标志；可重复 HidePid  
+  - BridgeSetting：`TiDaoji/Options`（默认 `0x7FF`）、`DriverName`  
+  - GUI：Driver/Type/LastPid 持久化 `.ini`；错误带 Win32 文本  
+  - Olly/TE：Open Question #3 **后置**（仅身份已改名，本期不重点打磨）  
+- **DoD（PR4）**：命令/GUI 可写 `HIDE_INFO`；设置持久化；帮助与 PR1 名一致 — **不以实机矩阵为门禁**
 
-### PR5 — 装载 Runbook — **PR4 后或并行**
+### PR5 — 装载 Runbook — **done（与 PR4 同批）**
 
 - **Title**：`docs: DSU load/restore runbook (profile A only)`
+- **Doc**：`docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md`
 - **Dependencies**：PR3 风险模型已文档化
-- **Description**：  
-  - **仅画像 A**（K20）：临时 DSE；PG 全程 on；接受层 B 风险  
-  - restore **只验证 DSE/签名策略**，不验证 hook 已卸  
-  - 占位「工具名 / 进入 DSE 窗口命令 / restore 命令 / 验收命令」  
-  - 互斥红字（卸 CR）；回滚步骤；长睡/QPC 限制  
-- **DoD（PR5）**：runbook 可独立照做装载；**不**要求矩阵实测结果
+- **交付**：  
+  - **仅画像 A**（K20）：临时 DSE；PG 全程 on；接受层 B  
+  - restore **只验证 DSE**，不验证 hook 已卸  
+  - 工具命令占位表；互斥红字；回滚；故障速查；打印清单  
+  - `install_driver.bat` 指向 runbook + stop 后短等  
+- **DoD（PR5）**：runbook 可独立照做装载语义；**不**要求矩阵实测
 
 ### PR6（可选）— 硬化
 
@@ -877,3 +880,4 @@ flowchart LR
 | Draft Rev 5 | 2026-08-06 | PR3 后残余风险落地：Unload drain 2s；SSDT/hooklib 写路径默认冻结；Start FAIL reason 分流；残余表补 PR3+ 列 |
 | Draft Rev 6 | 2026-08-06 | 关联研究：`docs/2026-08-06-infinityhook-lineage-newos-research.md`（IHPM/族谱/新系统；Claude §10.2） |
 | Draft Rev 7 | 2026-08-07 | **顺序拍板**：PR3 后先 **PR4 → PR5**；实机/VMP/支持矩阵 **最后**；不挡 PR4/5 合入 |
+| Draft Rev 8 | 2026-08-07 | **PR4+PR5 同批落地**：插件 v2 + GUI ini + DSU A runbook；Olly/TE 仍后置 |

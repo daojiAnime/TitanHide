@@ -36,9 +36,25 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 | 驱动文件 | `TiDaoji.sys` |
 | 服务名 | `TiDaoji`（= `\Device\TiDaoji` / `\\.\TiDaoji`） |
 | 日志 | `C:\TiDaoji.log` |
-| x64dbg 插件 | `TiDaoji.dp64`，命令 `TiDaoji` / `TiDaojiUnhide` / `TiDaojiOptions` / `TiDaojiName` |
+| x64dbg 插件 | `TiDaoji.dp64` v2（PR4） |
+| GUI | `TiDaojiGUI.exe`（Type/Driver/PID 写 `.ini`） |
+| 装载 Runbook | `docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md`（PR5，画像 A） |
 
 > 用户口中的「管道名」在此实现为 **设备符号链接**（`\DosDevices\TiDaoji`），**不是** Windows Named Pipe。
+
+### x64dbg 插件命令（PR4）
+
+| 命令 | 作用 |
+|------|------|
+| `TiDaoji` | 对当前调试进程 `HidePid`（可重复下发） |
+| `TiDaojiUnhide` | `UnhidePid` |
+| `TiDaojiUnhideAll` | `UnhideAll` |
+| `TiDaojiOptions [n]` | 读/写 Type 位掩码（`BridgeSetting` `TiDaoji/Options`，默认 `0x7FF`） |
+| `TiDaojiName [svc]` | 设备名（默认 `TiDaoji` → `\\.\TiDaoji`） |
+| `TiDaojiStatus` | 打开设备探针 + 会话状态 |
+| `TiDaojiHelp` | 帮助 |
+
+自动：系统断点 → hide；结束调试 → unhide。
 
 ## Features
 
@@ -83,9 +99,13 @@ TiDaojiName NotTiDaoji
 
 ## DSU 工作流（画像 A）
 
+**完整步骤与检查清单**：[`docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md`](docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md)（PR5）。
+
 **画像 A（已拍板）**：仅临时放开 **DSE** 装载，装完立即 restore；**PG 保持开启**。  
-`sc start` → InfinityHook `Start`（层 B 生效）→ Hide → **立即 restore DSE**。  
+`sc start` → InfinityHook `Start`（层 B 生效）→ **立即 restore DSE** → Hide。  
 Restore **不**卸载驱动、**不**撤销层 B；hide 依赖仍存活的 IH 改写——有意取舍，不是“系统已干净”。
+
+快捷：`install_driver.bat`（须已在 DSE 窗口内；start 后立刻 restore）。
 
 ## Remarks
 
