@@ -67,6 +67,12 @@
     <Driver_SpectreMitigation>false</Driver_SpectreMitigation>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)infinity_hook;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
   <ImportGroup Condition="'$(PlatformToolset)' == 'WindowsKernelModeDriver10.0' and '$(IsDriver)' != 'true' and Exists('$(WDKContentRoot)build\$(Platform)\ImportAfter')">
     <Import Project="$(WDKContentRoot)build\$(Platform)\ImportAfter\*.props" />
   </ImportGroup>
@@ -198,6 +204,11 @@
     <ClInclude Include="ssdt.h" />
     <ClInclude Include="threadhidefromdbg.h" />
     <ClInclude Include="TiDaoji.h" />
+    <ClInclude Include="infinity_hook\hook.h" />
+    <ClInclude Include="infinity_hook\defines.h" />
+    <ClInclude Include="infinity_hook\headers.h" />
+    <ClInclude Include="infinity_hook\utils.hpp" />
+    <ClInclude Include="infinity_hook\hde\hde64.h" />
     <ClInclude Include="undocumented.h" />
     <ClInclude Include="_global.h" />
   </ItemGroup>
@@ -212,6 +223,8 @@
     <ClCompile Include="ssdt.cpp" />
     <ClCompile Include="threadhidefromdbg.cpp" />
     <ClCompile Include="TiDaoji.cpp" />
+    <ClCompile Include="infinity_hook\hook.cpp" />
+    <ClCompile Include="infinity_hook\hde\hde64.cpp" />
     <ClCompile Include="undocumented.cpp" />
     <ClCompile Include="_global.cpp" />
   </ItemGroup>

@@ -1,9 +1,10 @@
 # TiDaoji
 
-> **⚠️ NOT PG-SAFE (PR1)** — 当前构建仍是 **SSDT + hooklib** 写路径。  
-> **禁止**在最终「DSU 装载 → 立即 restore DSE → 长时间运行」工作流上把它当完成品。  
-> InfinityHook 引擎迁移见 `docs/2026-08-06-tidaoji-infinityhook-design.md`（PR2/PR3）。  
-> 经典风险：`0x109 CRITICAL_STRUCTURE_CORRUPTION`（长期挂 SSDT / 未关 PG）。
+> **⚠️ NOT PG-SAFE (PR2)** — **生产 hide 仍是 SSDT + hooklib**。  
+> InfinityHook 引擎已 **vendor 进 `TiDaoji/infinity_hook/`**（`IsStarted`/`Repair`/`Cleanup` 已修），**尚未接线** hide（PR3）。  
+> **禁止**在「DSU restore 后长跑」工作流上当完成品。  
+> 设计：`docs/2026-08-06-tidaoji-infinityhook-design.md`  
+> 经典风险：SSDT 路径 → `0x109`；IH 层 B 长驻 CKCL/时钟指针也 **不称** PG-safe。
 
 TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉并 **全量改名**，用于在特定进程上隐藏调试器痕迹。  
 通过 hook 多个 `Nt*`（当前仍为 SSDT）并改写返回值；向驱动写入 `HIDE_INFO`（PID + Type 位掩码）启用保护。

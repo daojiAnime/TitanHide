@@ -5,6 +5,15 @@
 #include "log.h"
 #include "ntdll.h"
 #include "threadhidefromdbg.h"
+// PR2: InfinityHook engine is linked but production hide still uses SSDT (hooks.cpp).
+// PR3 will wire k_hook::Start to replace SSDT. Cleanup is always safe (no-op if idle).
+#include "infinity_hook/hook.h"
+
+#if defined(TIDAOJI_IH_SELFTEST)
+static void __fastcall TiDaojiIhNoopCallback(unsigned long, PVOID*)
+{
+}
+#endif
 
 static UNICODE_STRING DeviceName;
 static wchar_t DeviceNameBuffer[256];
@@ -13,6 +22,10 @@ static wchar_t Win32DeviceBuffer[256];
 
 static void DriverUnload(IN PDRIVER_OBJECT DriverObject)
 {
+    // PR2: tear down InfinityHook layer B if a self-test/Start left it running.
+    // Production hide is still SSDT until PR3; Cleanup is idempotent.
+    k_hook::Cleanup();
+
     IoDeleteSymbolicLink(&Win32Device);
     IoDeleteDevice(DriverObject->DeviceObject);
     Hooks::Deinitialize();
@@ -171,8 +184,26 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     }
     Log("[TIDAOJI] Symbolic link %.*ws->%.*ws created!\r\n", Win32Device.Length / sizeof(WCHAR), Win32Device.Buffer, DeviceName.Length / sizeof(WCHAR), DeviceName.Buffer);
 
-    //initialize hooking
+    //initialize hooking (SSDT path — PR1/PR2 production)
     Log("[TIDAOJI] Hooks::Initialize() hooked %d functions\r\n", Hooks::Initialize());
+
+#if defined(TIDAOJI_IH_SELFTEST)
+    // Optional PR2 smoke: Ready → Start → Stop → Cleanup. Not for production hide.
+    {
+        if (k_hook::Initialize(&TiDaojiIhNoopCallback) && k_hook::Start())
+        {
+            Log("[TIDAOJI] IH selftest Start OK LayerB=%d\r\n", k_hook::LayerBIntact() ? 1 : 0);
+            k_hook::Stop();
+            k_hook::Cleanup();
+            Log("[TIDAOJI] IH selftest Stop/Cleanup done\r\n");
+        }
+        else
+        {
+            Log("[TIDAOJI] IH selftest Initialize/Start FAILED\r\n");
+            k_hook::Cleanup();
+        }
+    }
+#endif
 
     return STATUS_SUCCESS;
 }

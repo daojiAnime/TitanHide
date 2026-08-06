@@ -90,4 +90,38 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+
+  <ItemGroup>
+    <Filter Include="infinity_hook">
+      <UniqueIdentifier>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="infinity_hook\hde">
+      <UniqueIdentifier>{B2C3D4E5-F6A7-8901-BCDE-F12345678901}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="infinity_hook\hook.cpp">
+      <Filter>infinity_hook</Filter>
+    </ClCompile>
+    <ClCompile Include="infinity_hook\hde\hde64.cpp">
+      <Filter>infinity_hook\hde</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="infinity_hook\hook.h">
+      <Filter>infinity_hook</Filter>
+    </ClInclude>
+    <ClInclude Include="infinity_hook\defines.h">
+      <Filter>infinity_hook</Filter>
+    </ClInclude>
+    <ClInclude Include="infinity_hook\headers.h">
+      <Filter>infinity_hook</Filter>
+    </ClInclude>
+    <ClInclude Include="infinity_hook\utils.hpp">
+      <Filter>infinity_hook</Filter>
+    </ClInclude>
+    <ClInclude Include="infinity_hook\hde\hde64.h">
+      <Filter>infinity_hook\hde</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>

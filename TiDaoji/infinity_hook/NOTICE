@@ -1,0 +1,19 @@
+TiDaoji/infinity_hook
+=====================
+
+Ported and modified from the InfinityHook Pro lineage used in CR Full
+(SakDriver/infinity_hook_pro), itself based on:
+
+- everdox/InfinityHook
+- FiYHer/InfinityHookPro (Win10 1909+ / Win11 clock paths)
+
+Modifications for TiDaoji (PR2):
+- Fix IsStarted / Stop no-op bug (IsStarted set true only after full Start)
+- CKCL SYSTEMCALL enable moved to Start (not Initialize)
+- Strategy A: Repair() + DetectThread only repairs layer B
+- Cleanup() / RollbackStartPartial for failed Start
+- ConflictProbe must not treat GetCpuClock==2 alone as conflict
+- Pool tag 'Tdji'
+
+This engine is NOT PG-safe. Long-lived CKCL/GetCpuClock/Hvl/Halp mutations remain
+while the driver is loaded. DSU restore of DSE is unrelated to unloading hooks.
