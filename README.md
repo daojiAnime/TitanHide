@@ -124,14 +124,19 @@ TiDaojiName NotTiDaoji
 `sc start` → InfinityHook `Start`（层 B 生效）→ **立即 restore DSE** → Hide。  
 Restore **不**卸载驱动、**不**撤销层 B；hide 依赖仍存活的 IH 改写——有意取舍，不是“系统已干净”。
 
-快捷（仓库内 DSE 工具，**已 git 跟踪**）：
+### 装载剖面（可选 L1 / L2 / L3）
 
-```bat
-tools\dse\load_tidaoji_profile_a.bat
-REM 或: tools\dse\dse_off.bat  ^&  install_driver.bat  ^&  tools\dse\dse_on.bat
-```
+| 剖面 | 一键 / 入口 | 说明 |
+|------|-------------|------|
+| **L1** DSE+sc | `tools\dse\load_tidaoji_profile_a.bat` | 默认研究路径；KDU 已入库 |
+| **L2** manual map | `tools\loader\L2_kdmapper.bat` | 需自备 `KDMAPPER=` 外部 mapper |
+| **L3** 多 provider | `tools\loader\L3_multi_provider.bat` | `TIDAOJI_MAPPER` / `TIDAOJI_PROVIDER` |
+| **Auto** | `tools\loader\load_auto.bat` | 有 mapper 用 L2/L3，否则 L1 |
+| 软卸载 | `tools\loader\soft_unload.bat` / `TiDaojiSoftUnload` | map 路径无 sc stop |
 
-详见 `tools/dse/README.md`（含 KDU 哈希 / NOTICE）。
+驱动：`DriverObject==NULL` → `IoCreateDriver`；`HIDE_INFO.SoftUnload`。  
+详文：`docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md`  
+DSE 工具：`tools/dse/README.md`
 
 ## Remarks
 

@@ -202,10 +202,31 @@ else
   bad "tools/dse incomplete"
 fi
 if grep -qF 'tools/dse' docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md \
-  && grep -qF 'dse_off.bat' README.md; then
+  && grep -qF 'tools/dse' README.md; then
   pass "docs/README point at tools/dse"
 else
   bad "docs missing tools/dse links"
+fi
+
+# --- 9. L2/L3 loader profiles ---
+if grep -qF 'IoCreateDriver' TiDaoji/TiDaoji.cpp \
+  && grep -qF 'SoftUnload' TiDaoji/TiDaoji.h \
+  && grep -qF 'SoftUnload' TiDaoji/TiDaoji.cpp; then
+  pass "manual-map Entry + SoftUnload"
+else
+  bad "L2/L3 driver contract missing"
+fi
+if [[ -f tools/loader/L2_kdmapper.bat && -f tools/loader/L3_multi_provider.bat \
+  && -f tools/loader/load_auto.bat && -f tools/loader/soft_unload.bat \
+  && -f docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md ]]; then
+  pass "L2/L3 loader scripts + doc"
+else
+  bad "loader toolkit incomplete"
+fi
+if grep -qF 'TiDaojiSoftUnload' TiDaoji_x64dbg/plugin.cpp; then
+  pass "plugin SoftUnload command"
+else
+  bad "plugin SoftUnload missing"
 fi
 
 echo "=== summary fail=$fail ==="

@@ -128,6 +128,10 @@ bool Hider::ProcessData(PVOID Buffer, ULONG Size)
         }
         break;
 
+        case SoftUnload:
+            // Handled in TiDaoji.cpp DriverWrite before ProcessData; ignore if seen here.
+            break;
+
         case UnhidePid:
         {
             int FoundEntry = EntryFind(HideInfo[i].Pid);

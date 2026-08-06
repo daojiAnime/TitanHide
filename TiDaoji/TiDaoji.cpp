@@ -7,11 +7,25 @@
 #include "threadhidefromdbg.h"
 // PR3: production hide is InfinityHook (k_hook). SSDT write path is unused.
 #include "infinity_hook/hook.h"
+#include "TiDaoji.h"
+
+// Undocumented but used by manual-map loaders (L2/L3): create a real DRIVER_OBJECT
+// when mapper calls DriverEntry with DriverObject == NULL.
+extern "C" NTKERNELAPI NTSTATUS NTAPI IoCreateDriver(
+    _In_opt_ PUNICODE_STRING DriverName,
+    _In_ PDRIVER_INITIALIZE InitializationFunction
+);
 
 static UNICODE_STRING DeviceName;
 static wchar_t DeviceNameBuffer[256];
 static UNICODE_STRING Win32Device;
 static wchar_t Win32DeviceBuffer[256];
+
+static PDRIVER_OBJECT g_DriverObject = nullptr;
+static PDEVICE_OBJECT g_DeviceObject = nullptr;
+static volatile LONG g_TornDown = 0;
+static BOOLEAN g_ViaIoCreateDriver = FALSE;
+static BOOLEAN g_SymlinkOk = FALSE;
 
 // After Cleanup, CPUs may still run TiDaojiSyscallCallback/HookNt*.
 // No per-syscall refcount; fixed drain shrinks UAF window (not formal).
@@ -20,22 +34,45 @@ static wchar_t Win32DeviceBuffer[256];
 #define TIDAOJI_UNLOAD_DRAIN_MS 5000
 #endif
 
-static void DriverUnload(IN PDRIVER_OBJECT DriverObject)
+static void DrainInflight()
 {
-    // Order: stop IH first -> drain inflight syscalls -> delete device -> NTDLL
-    Hooks::Deinitialize(); // k_hook::Cleanup()
+    LARGE_INTEGER delay;
+    delay.QuadPart = -(LONGLONG)TIDAOJI_UNLOAD_DRAIN_MS * 10000LL;
+    Log("[TIDAOJI] Unload drain %d ms\r\n", TIDAOJI_UNLOAD_DRAIN_MS);
+    KeDelayExecutionThread(KernelMode, FALSE, &delay);
+}
 
+// Shared teardown for SCM Unload and SoftUnload (L2/L3).
+static void FullTeardown()
+{
+    if(InterlockedCompareExchange(&g_TornDown, 1, 0) != 0)
     {
-        LARGE_INTEGER delay;
-        // Relative timeout in 100ns units (negative = relative)
-        delay.QuadPart = -(LONGLONG)TIDAOJI_UNLOAD_DRAIN_MS * 10000LL;
-        Log("[TIDAOJI] Unload drain %d ms\r\n", TIDAOJI_UNLOAD_DRAIN_MS);
-        KeDelayExecutionThread(KernelMode, FALSE, &delay);
+        Log("[TIDAOJI] FullTeardown already done\r\n");
+        return;
     }
 
-    IoDeleteSymbolicLink(&Win32Device);
-    IoDeleteDevice(DriverObject->DeviceObject);
+    Log("[TIDAOJI] FullTeardown begin\r\n");
+    Hooks::Deinitialize(); // k_hook::Cleanup()
+    DrainInflight();
+
+    if(g_SymlinkOk)
+    {
+        IoDeleteSymbolicLink(&Win32Device);
+        g_SymlinkOk = FALSE;
+    }
+    if(g_DeviceObject)
+    {
+        IoDeleteDevice(g_DeviceObject);
+        g_DeviceObject = nullptr;
+    }
     NTDLL::Deinitialize();
+    Log("[TIDAOJI] FullTeardown done\r\n");
+}
+
+static void DriverUnload(IN PDRIVER_OBJECT DriverObject)
+{
+    UNREFERENCED_PARAMETER(DriverObject);
+    FullTeardown();
 }
 
 static NTSTATUS DriverCreateClose(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
@@ -64,9 +101,26 @@ static NTSTATUS DriverWrite(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
     if(pIoStackIrp)
     {
         PVOID pInBuffer = (PVOID)Irp->AssociatedIrp.SystemBuffer;
-        if(pInBuffer)
+        ULONG len = pIoStackIrp->Parameters.Write.Length;
+        if(pInBuffer && len >= sizeof(HIDE_INFO))
         {
-            if(Hider::ProcessData(pInBuffer, pIoStackIrp->Parameters.Write.Length))
+            HIDE_INFO* hi = (HIDE_INFO*)pInBuffer;
+            if(hi->Command == SoftUnload)
+            {
+                Log("[TIDAOJI] SoftUnload requested (L2/L3 path)\r\n");
+                FullTeardown();
+            }
+            else if(Hider::ProcessData(pInBuffer, len))
+                Log("[TIDAOJI] HiderProcessData OK!\r\n");
+            else
+            {
+                Log("[TIDAOJI] HiderProcessData failed...\r\n");
+                RetStatus = STATUS_UNSUCCESSFUL;
+            }
+        }
+        else if(pInBuffer)
+        {
+            if(Hider::ProcessData(pInBuffer, len))
                 Log("[TIDAOJI] HiderProcessData OK!\r\n");
             else
             {
@@ -81,7 +135,6 @@ static NTSTATUS DriverWrite(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
         RetStatus = STATUS_UNSUCCESSFUL;
     }
     Irp->IoStatus.Status = RetStatus;
-    // Report bytes accepted so user-mode WriteFile lpNumberOfBytesWritten is non-zero on success
     Irp->IoStatus.Information = NT_SUCCESS(RetStatus) && pIoStackIrp
                                 ? pIoStackIrp->Parameters.Write.Length
                                 : 0;
@@ -89,22 +142,32 @@ static NTSTATUS DriverWrite(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
     return RetStatus;
 }
 
-static void TeardownDevice(IN PDRIVER_OBJECT DriverObject)
+static void TeardownDevicePartial(IN PDRIVER_OBJECT DriverObject)
 {
-    IoDeleteSymbolicLink(&Win32Device);
-    if(DriverObject->DeviceObject)
-        IoDeleteDevice(DriverObject->DeviceObject);
+    UNREFERENCED_PARAMETER(DriverObject);
+    if(g_SymlinkOk)
+    {
+        IoDeleteSymbolicLink(&Win32Device);
+        g_SymlinkOk = FALSE;
+    }
+    if(g_DeviceObject)
+    {
+        IoDeleteDevice(g_DeviceObject);
+        g_DeviceObject = nullptr;
+    }
 }
 
-extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath)
+// Real init once we have a DRIVER_OBJECT (SCM or IoCreateDriver).
+static NTSTATUS DriverInitialize(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath)
 {
-    // Initialize name buffers
+    g_DriverObject = DriverObject;
+    g_TornDown = 0;
+
     RtlInitEmptyUnicodeString(&DeviceName, DeviceNameBuffer, sizeof(DeviceNameBuffer));
     RtlAppendUnicodeToString(&DeviceName, L"\\Device\\");
     RtlInitEmptyUnicodeString(&Win32Device, Win32DeviceBuffer, sizeof(Win32DeviceBuffer));
     RtlAppendUnicodeToString(&Win32Device, L"\\DosDevices\\");
 
-    // Derive the device name and symbolic link from the registry path
     UNICODE_STRING DriverName = {};
     if(RegistryPath != NULL && RegistryPath->Buffer != NULL)
     {
@@ -114,7 +177,7 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
             USHORT index = CharacterCount - i - 1;
             if(RegistryPath->Buffer[index] == L'\\')
             {
-                index++; // skip the backslash
+                index++;
                 DriverName.Buffer = RegistryPath->Buffer + index;
                 DriverName.Length = (USHORT)(RegistryPath->Length - index * sizeof(WCHAR));
                 DriverName.MaximumLength = DriverName.Length;
@@ -123,22 +186,21 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
         }
     }
 
-    // Fall back to default driver name
     if(DriverName.Length == 0)
-    {
         RtlInitUnicodeString(&DriverName, L"TiDaoji");
-    }
 
-    // Use the driver name
     RtlAppendUnicodeStringToString(&DeviceName, &DriverName);
     RtlAppendUnicodeStringToString(&Win32Device, &DriverName);
     InitLog(&DriverName);
-    Log("[TIDAOJI] DriverName: %.*ws\r\n", DriverName.Length / sizeof(WCHAR), DriverName.Buffer);
+    Log("[TIDAOJI] DriverName set (manual-map safe fallback TiDaoji)\r\n");
+    if(g_ViaIoCreateDriver)
+        Log("[TIDAOJI] load path: IoCreateDriver (L2/L3 manual-map style)\r\n");
+    else
+        Log("[TIDAOJI] load path: SCM / normal DriverObject (L1)\r\n");
 
     PDEVICE_OBJECT DeviceObject = NULL;
     NTSTATUS status;
 
-    //set callback functions
     DriverObject->DriverUnload = DriverUnload;
     for(unsigned int i = 0; i <= IRP_MJ_MAXIMUM_FUNCTION; i++)
         DriverObject->MajorFunction[i] = DriverDefaultHandler;
@@ -146,14 +208,12 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     DriverObject->MajorFunction[IRP_MJ_CLOSE] = DriverCreateClose;
     DriverObject->MajorFunction[IRP_MJ_WRITE] = DriverWrite;
 
-    //read ntdll.dll from disk so we can use it for exports
     if(!NT_SUCCESS(NTDLL::Initialize()))
     {
         Log("[TIDAOJI] Ntdll::Initialize() failed...\r\n");
         return STATUS_UNSUCCESSFUL;
     }
 
-    //initialize undocumented APIs
     if(!Undocumented::UndocumentedInit())
     {
         Log("[TIDAOJI] UndocumentedInit() failed...\r\n");
@@ -162,16 +222,14 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     }
     Log("[TIDAOJI] UndocumentedInit() was successful!\r\n");
 
-    //find the offset of CrossThreadFlags in ETHREAD
     status = FindCrossThreadFlagsOffset(&CrossThreadFlagsOffset);
     if(!NT_SUCCESS(status))
     {
-        Log("[TIDAOJI] FindCrossThreadFlagsOffset() failed: 0x%lX\r\n", status);
+        Log("[TIDAOJI] FindCrossThreadFlagsOffset() failed\r\n");
         NTDLL::Deinitialize();
         return status;
     }
 
-    //create io device
     status = IoCreateDevice(DriverObject,
                             0,
                             &DeviceName,
@@ -179,21 +237,15 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
                             FILE_DEVICE_SECURE_OPEN,
                             FALSE,
                             &DeviceObject);
-    if(!NT_SUCCESS(status))
+    if(!NT_SUCCESS(status) || !DeviceObject)
     {
         Log("[TIDAOJI] IoCreateDevice Error...\r\n");
         NTDLL::Deinitialize();
-        return status;
+        return !NT_SUCCESS(status) ? status : STATUS_UNEXPECTED_IO_ERROR;
     }
-    if(!DeviceObject)
-    {
-        Log("[TIDAOJI] Unexpected I/O Error...\r\n");
-        NTDLL::Deinitialize();
-        return STATUS_UNEXPECTED_IO_ERROR;
-    }
-    Log("[TIDAOJI] Device %.*ws created successfully!\r\n", DeviceName.Length / sizeof(WCHAR), DeviceName.Buffer);
+    g_DeviceObject = DeviceObject;
+    Log("[TIDAOJI] Device created successfully!\r\n");
 
-    //create symbolic link
     DeviceObject->Flags |= DO_BUFFERED_IO;
     DeviceObject->Flags &= (~DO_DEVICE_INITIALIZING);
     status = IoCreateSymbolicLink(&Win32Device, &DeviceName);
@@ -201,22 +253,41 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     {
         Log("[TIDAOJI] IoCreateSymbolicLink Error...\r\n");
         IoDeleteDevice(DeviceObject);
+        g_DeviceObject = nullptr;
         NTDLL::Deinitialize();
         return status;
     }
-    Log("[TIDAOJI] Symbolic link %.*ws->%.*ws created!\r\n", Win32Device.Length / sizeof(WCHAR), Win32Device.Buffer, DeviceName.Length / sizeof(WCHAR), DeviceName.Buffer);
+    g_SymlinkOk = TRUE;
+    Log("[TIDAOJI] Symbolic link created!\r\n");
 
-    // PR3: InfinityHook hide - fail hard on 0 so CKCL/layer B never half-armed
     const int hooked = Hooks::Initialize();
     if(hooked <= 0)
     {
-        Log("[TIDAOJI] Hooks::Initialize failed (%d) - abort load\r\n", hooked);
-        k_hook::Cleanup(); // idempotent; covers Start-fail residual
-        TeardownDevice(DriverObject);
+        Log("[TIDAOJI] Hooks::Initialize failed - abort load\r\n");
+        k_hook::Cleanup();
+        TeardownDevicePartial(DriverObject);
         NTDLL::Deinitialize();
         return STATUS_UNSUCCESSFUL;
     }
-    Log("[TIDAOJI] Hooks::Initialize armed %d functions (InfinityHook)\r\n", hooked);
+    Log("[TIDAOJI] InfinityHook hide armed (functions hooked)\r\n");
+    Log("[TIDAOJI] SoftUnload supported via HIDE_INFO.Command=SoftUnload\r\n");
 
     return STATUS_SUCCESS;
+}
+
+// L1: SCM passes real DriverObject.
+// L2/L3 mappers often pass NULL DriverObject / NULL RegistryPath -> IoCreateDriver.
+extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath)
+{
+    if(DriverObject == NULL)
+    {
+        g_ViaIoCreateDriver = TRUE;
+        UNICODE_STRING drvName;
+        RtlInitUnicodeString(&drvName, L"\\Driver\\TiDaoji");
+        // IoCreateDriver invokes DriverInitialize with a real DRIVER_OBJECT.
+        return IoCreateDriver(&drvName, DriverInitialize);
+    }
+
+    g_ViaIoCreateDriver = FALSE;
+    return DriverInitialize(DriverObject, RegistryPath);
 }

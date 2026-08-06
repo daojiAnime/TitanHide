@@ -135,14 +135,15 @@ static bool cbTiDaojiHelp(int argc, char* argv[])
     _plugin_logputs("[" PLUGIN_NAME "] commands:");
     _plugin_logputs("  TiDaoji              — HidePid for current debuggee (re-apply OK)");
     _plugin_logputs("  TiDaojiUnhide        — UnhidePid for current debuggee");
-    _plugin_logputs("  TiDaojiUnhideAll     — UnhideAll (driver table clear)");
-    _plugin_logputs("  TiDaojiOptions [n]   — get/set Type bitmask (BridgeSetting TiDaoji/Options)");
-    _plugin_logputs("  TiDaojiName [svc]    — get/set device/service name (default TiDaoji)");
-    _plugin_logputs("  TiDaojiStatus        — driver open probe + session state");
-    _plugin_logputs("  TiDaojiHelp          — this text");
+    _plugin_logputs("  TiDaojiUnhideAll     - UnhideAll (driver table clear)");
+    _plugin_logputs("  TiDaojiSoftUnload    - L2/L3: SoftUnload (no sc stop; SCM may still list service)");
+    _plugin_logputs("  TiDaojiOptions [n]   - get/set Type bitmask (BridgeSetting TiDaoji/Options)");
+    _plugin_logputs("  TiDaojiName [svc]    - get/set device/service name (default TiDaoji)");
+    _plugin_logputs("  TiDaojiStatus        - driver open probe + session state");
+    _plugin_logputs("  TiDaojiHelp          - this text");
     _plugin_logputs(" Auto: SYSTEMBP -> TiDaoji; stop debug -> TiDaojiUnhide");
     _plugin_logputs(" Requires kernel TiDaoji.sys (InfinityHook). NOT PG-safe. No dual-IH with CR.");
-    _plugin_logputs(" Runbook: docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md");
+    _plugin_logputs(" Loaders: tools/loader (L1 DSE+sc, L2 kdmapper, L3 multi-provider)");
     return true;
 }
 
@@ -205,6 +206,19 @@ static bool cbTiDaojiUnhideAll(int argc, char* argv[])
     UNREFERENCED_PARAMETER(argc);
     UNREFERENCED_PARAMETER(argv);
     if(TiDaojiCall(UnhideAll))
+    {
+        hidden = false;
+        return true;
+    }
+    return false;
+}
+
+static bool cbTiDaojiSoftUnload(int argc, char* argv[])
+{
+    UNREFERENCED_PARAMETER(argc);
+    UNREFERENCED_PARAMETER(argv);
+    _plugin_logputs("[" PLUGIN_NAME "] SoftUnload (L2/L3 teardown)");
+    if(TiDaojiCall(SoftUnload))
     {
         hidden = false;
         return true;
@@ -289,6 +303,7 @@ void TiDaojiInit(PLUG_INITSTRUCT* initStruct)
     _plugin_registercommand(pluginHandle, "TiDaoji", cbTiDaoji, true);
     _plugin_registercommand(pluginHandle, "TiDaojiUnhide", cbTiDaojiUnhide, true);
     _plugin_registercommand(pluginHandle, "TiDaojiUnhideAll", cbTiDaojiUnhideAll, false);
+    _plugin_registercommand(pluginHandle, "TiDaojiSoftUnload", cbTiDaojiSoftUnload, false);
     _plugin_registercommand(pluginHandle, "TiDaojiOptions", cbTiDaojiOptions, false);
     _plugin_registercommand(pluginHandle, "TiDaojiName", cbTiDaojiName, false);
     _plugin_registercommand(pluginHandle, "TiDaojiStatus", cbTiDaojiStatus, false);
@@ -304,6 +319,7 @@ void TiDaojiStop()
     _plugin_unregistercommand(pluginHandle, "TiDaojiStatus");
     _plugin_unregistercommand(pluginHandle, "TiDaojiOptions");
     _plugin_unregistercommand(pluginHandle, "TiDaojiName");
+    _plugin_unregistercommand(pluginHandle, "TiDaojiSoftUnload");
     _plugin_unregistercommand(pluginHandle, "TiDaojiUnhideAll");
     _plugin_unregistercommand(pluginHandle, "TiDaojiUnhide");
     _plugin_unregistercommand(pluginHandle, "TiDaoji");

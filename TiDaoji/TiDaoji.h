@@ -22,9 +22,12 @@ enum HIDE_TYPE
 
 enum HIDE_COMMAND
 {
-    HidePid, //Hide a process
-    UnhidePid, //Unhide a process
-    UnhideAll //Unhide everything
+    HidePid,     // Hide a process
+    UnhidePid,   // Unhide a process
+    UnhideAll,   // Unhide everything
+    // L2/L3 manual-map / no-SCM: tear down IH + device without sc stop.
+    // Safe to ignore on old clients; new plugins may send SoftUnload.
+    SoftUnload
 };
 
 //structures
@@ -34,5 +37,10 @@ struct HIDE_INFO
     ULONG Type;
     ULONG Pid;
 };
+
+// Loader profile tags (usermode scripts / docs only; not sent to kernel)
+// L1 = DSE window + sc start
+// L2 = external kdmapper-class manual map
+// L3 = alternate BYOVD / multi-provider map (optional)
 
 #endif // _TIDAOJI_H
