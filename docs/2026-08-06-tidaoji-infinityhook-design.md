@@ -5,12 +5,13 @@
 | **Document** | TiDaoji Design |
 | **Author** | daoji / Grok Build |
 | **Date** | 2026-08-06 |
-| **Status** | Draft（Rev 4 — 用户拍板：DSU 画像 A + 原地 hard-rename；实施从 PR1 开始） |
-| **Base branch** | `merge/lityrgia-vmp` @ `/Users/daoji/Code/TitanHide` (commit `78e3283`) |
+| **Status** | Draft Rev 6 — PR1–PR3 已接线；残余风险缓解 + 族谱研究已落地 |
+| **Base branch** | `pr3/wire-infinity-hook` @ `/Users/daoji/Code/TitanHide` |
 | **Target product name** | **TiDaoji**（驱动 `TiDaoji.sys`） |
 | **Repo** | **原地 hard-rename**：`/Users/daoji/Code/TitanHide` 内产品身份 hard-rename TitanHide→TiDaoji，保留同一 git 历史（K21） |
 | **DSU profile** | **画像 A：仅临时 DSE**；全程 PG 开启；接受层 B 在 PG 下 long-lived 残余风险（K20） |
-| **Implementation now** | **仅 PR1 rename**（PR2 InfinityHook 未开工） |
+| **Implementation now** | PR3 InfinityHook 生产 hide；SSDT 写冻结；drain 5s |
+| **Related research** | [`docs/2026-08-06-infinityhook-lineage-newos-research.md`](2026-08-06-infinityhook-lineage-newos-research.md)（IHPM/族谱/新系统；**不** vendor IHPM；**NOT PG-safe**） |
 
 ---
 
@@ -445,7 +446,7 @@ TiDaoji/
 #### DriverEntry / Unload 契约
 
 **DriverEntry**：派生名 → NTDLL/Undocumented/CrossThreadFlags → Device → Symlink（失败删 Device）→ `Hooks::Initialize`；若 0：`Cleanup` + 删 symlink/device + NTDLL 清理 → `STATUS_UNSUCCESSFUL`。  
-**Unload**：`Cleanup`/`Stop` → drain ≥1–2s → 删设备 → NTDLL。  
+**Unload**：`Cleanup`/`Stop` → drain 默认 **5s**（`TIDAOJI_UNLOAD_DRAIN_MS`；研究可 10s）→ 删设备 → NTDLL。  
 **加载失败后**：CKCL 不得残留 SYSTEMCALL（`Cleanup` 契约）。
 
 #### 与 CR InfinityHook 互斥（PR3）
@@ -502,17 +503,17 @@ sequenceDiagram
 
 #### 残余 BSOD / 不稳定风险
 
-| 严重度 | 风险 | 缓解 |
-|--------|------|------|
-| **高** | **层 B long-lived**（GetCpuClock/Hvl/Halp/CKCL）与未来 PG 规则、HVCI、完整性策略交互 → 可能 0x109 或其它 bugcheck | 不声称 PG-safe；支持矩阵实测；缩短不必要存活时间 |
-| **高** | InfinityHook pattern/栈 magic（`0x501802`/`0x601802`/`0xF33`、`pStackCurrent[9]`）失效 → 崩溃或静默不 hook | 严格失败；分阶段日志 |
-| **高** | `Stop`/`IsStarted` 未修导致卸驱动后时钟指已卸模块 | **PR2 阻断修复** + 回归 |
-| **高** | 与 CR 双 IH | Start 前硬失败 |
-| **中** | Unload 与 inflight syscall 竞态 | Stop 内等线程 + unload drain delay |
-| **中** | DSU restore 失败但操作者以为已恢复 | Runbook 验证清单 |
-| **中** | 实现回归再次 SSDT 写 | 静态禁止生产调用 `SSDT::Hook` |
-| **低** | `KdDebuggerEnabled` 全局副作用 | 文档 |
-| **低** | `C:\TiDaoji.log` / 固定服务名 / 模块列表 `TiDaoji.sys` 被扫 | Security 节承认 |
+| 严重度 | 风险 | 缓解 | PR3+ 落地 |
+|--------|------|------|-----------|
+| **高** | **层 B long-lived**（GetCpuClock/Hvl/Halp/CKCL）与未来 PG 规则、HVCI、完整性策略交互 → 可能 0x109 或其它 bugcheck | 不声称 PG-safe；支持矩阵实测；缩短不必要存活时间 | **接受（K20）**；README 顶栏 |
+| **高** | InfinityHook pattern/栈 magic（`0x501802`/`0x601802`/`0xF33`、`pStackCurrent[9]`）失效 → 崩溃或静默不 hook | 严格失败；分阶段日志 | `Start: FAIL reason=…`；装载硬失败 |
+| **高** | `Stop`/`IsStarted` 未修导致卸驱动后时钟指已卸模块 | **PR2 阻断修复** + 回归 | PR2 已合 |
+| **高** | 与 CR 双 IH | Start 前硬失败 | `reason=ConflictProbe`；无抢回 |
+| **中** | Unload 与 inflight syscall 竞态 | Stop 内等线程 + unload drain delay | drain 默认 **5s**（`TIDAOJI_UNLOAD_DRAIN_MS`；研究可 10s） |
+| **中** | DSU restore 失败但操作者以为已恢复 | Runbook 验证清单 | PR5 范围 |
+| **中** | 实现回归再次 SSDT 写 | 静态禁止生产调用 `SSDT::Hook` | **写路径默认冻结**（`#ifndef TIDAOJI_ALLOW_SSDT_FALLBACK`） |
+| **低** | `KdDebuggerEnabled` 全局副作用 | 文档 | 未改 |
+| **低** | `C:\TiDaoji.log` / 固定服务名 / 模块列表 `TiDaoji.sys` 被扫 | Security 节承认 | 未改 |
 
 **验证窗口**：无 0x109 **≥ 2h** 多 build 为 **冒烟+耐久**；**不是** PG 形式化证明。30min 仅作早期冒烟，不得写入“PG 已验证”结论。
 
@@ -802,7 +803,7 @@ void Deinitialize();
   - 指针回调 + 11/10 全解析  
   - DriverEntry 检查返回值；失败清理设备  
   - CR 冲突硬失败  
-  - Unload：Stop → drain ≥1–2s → 删设备  
+  - Unload：Stop → drain 默认 5s（可 10s）→ 删设备  
   - 日志 DoD + 验收表 V1–V15 / U1–U3  
   - README 更新风险模型（消除 SSDT 经典 0x109；**不**称 PG-safe）  
 - **VMP 持续调试验收钉在本 PR 之后**（PR4 可先合代码，验收以 PR3 为准）
@@ -849,3 +850,5 @@ flowchart LR
 | Draft Rev 2 | 2026-08-06 | 评审修订：诚实 PG/层 B 模型；IsStarted/Stop 阻断修复；11 路严格成功；互斥硬失败；Unload 契约；Implementation Contracts；矩阵补全；PR 中间态风险；版本矩阵降级为待验证；K13–K16；ScyllaHide alternative；可观测 DoD |
 | Draft Rev 3 | 2026-08-06 | Issue 14/15/16：策略 A（Repair vs 幂等）；CKCL 仅 Start + Cleanup/Rollback 序列；ConflictProbe 可测算法（禁 GetCpuClock==2 误杀）；K17–K19；U2b/U3a–c/U4 |
 | Draft Rev 4 | 2026-08-06 | 用户拍板：K20 DSU 画像 A（仅 DSE，PG 全程 on）；K21 原地 hard-rename 同 git 历史；K22 实施仅 PR1；Open Q #1/#2 Resolved；PR5 仅 A；同步 `docs/2026-08-06-tidaoji-infinityhook-design.md` |
+| Draft Rev 5 | 2026-08-06 | PR3 后残余风险落地：Unload drain 2s；SSDT/hooklib 写路径默认冻结；Start FAIL reason 分流；残余表补 PR3+ 列 |
+| Draft Rev 6 | 2026-08-06 | 关联研究：`docs/2026-08-06-infinityhook-lineage-newos-research.md`（IHPM/族谱/新系统；Claude §10.2） |

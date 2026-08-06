@@ -13,6 +13,13 @@ static wchar_t DeviceNameBuffer[256];
 static UNICODE_STRING Win32Device;
 static wchar_t Win32DeviceBuffer[256];
 
+// Unload 后仍可能有 CPU 在 TiDaojiSyscallCallback / HookNt* 内。
+// Cleanup 已拆层 B，但没有 per-syscall 引用计数；固定 drain 降低 UAF 窗口（仍非形式化保证）。
+// 研究文档 P1：默认 5s（对齐 IHPM 10s 量级的一半）；可 -DTIDAOJI_UNLOAD_DRAIN_MS=10000 研究卸载。
+#ifndef TIDAOJI_UNLOAD_DRAIN_MS
+#define TIDAOJI_UNLOAD_DRAIN_MS 5000
+#endif
+
 static void DriverUnload(IN PDRIVER_OBJECT DriverObject)
 {
     // Order: stop IH first → drain inflight syscalls → delete device → NTDLL
@@ -20,7 +27,9 @@ static void DriverUnload(IN PDRIVER_OBJECT DriverObject)
 
     {
         LARGE_INTEGER delay;
-        delay.QuadPart = -1LL * 1000 * 1000 * 10; // 1s relative
+        // 相对超时：100ns 单位，负值 = 相对
+        delay.QuadPart = -(LONGLONG)TIDAOJI_UNLOAD_DRAIN_MS * 10000LL;
+        Log("[TIDAOJI] Unload drain %d ms\r\n", TIDAOJI_UNLOAD_DRAIN_MS);
         KeDelayExecutionThread(KernelMode, FALSE, &delay);
     }
 

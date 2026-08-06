@@ -118,6 +118,34 @@ PVOID SSDT::GetFunctionAddress(const char* apiname)
 #endif
 }
 
+// GetFunctionAddress = 生产只读路径（ResolveAllOrigPointers / Undocumented）。
+// SSDT 写路径默认冻结：避免回归再次触发经典 0x109。
+// 隔离实验：vcxproj 定义 TIDAOJI_ALLOW_SSDT_FALLBACK=1 才编译真实写实现。
+#ifndef TIDAOJI_ALLOW_SSDT_FALLBACK
+
+HOOK SSDT::Hook(const char* apiname, void* newfunc)
+{
+    UNREFERENCED_PARAMETER(apiname);
+    UNREFERENCED_PARAMETER(newfunc);
+    Log("[TIDAOJI] SSDT::Hook frozen (IH production; need TIDAOJI_ALLOW_SSDT_FALLBACK)\r\n");
+    return 0;
+}
+
+void SSDT::Hook(HOOK hHook)
+{
+    UNREFERENCED_PARAMETER(hHook);
+    Log("[TIDAOJI] SSDT::Hook(HOOK) frozen (IH production)\r\n");
+}
+
+void SSDT::Unhook(HOOK hHook, bool free)
+{
+    UNREFERENCED_PARAMETER(hHook);
+    UNREFERENCED_PARAMETER(free);
+    Log("[TIDAOJI] SSDT::Unhook frozen (IH production)\r\n");
+}
+
+#else // TIDAOJI_ALLOW_SSDT_FALLBACK — legacy write path (NOT for production hide)
+
 #ifdef _WIN64
 static PVOID FindCaveAddress(PVOID CodeStart, ULONG CodeSize, ULONG CaveSize)
 {
@@ -288,3 +316,5 @@ void SSDT::Unhook(HOOK hHook, bool free)
         RtlFreeMemory(hHook);
 #endif
 }
+
+#endif // TIDAOJI_ALLOW_SSDT_FALLBACK

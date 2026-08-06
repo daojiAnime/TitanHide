@@ -1,6 +1,35 @@
 #include "hooklib.h"
 #include "log.h"
 
+// 生产 hide 不走 hooklib；默认冻结写路径，与 SSDT::Hook 一致。
+// 仅 TIDAOJI_ALLOW_SSDT_FALLBACK 时编译真实 cave 补丁。
+#ifndef TIDAOJI_ALLOW_SSDT_FALLBACK
+
+HOOK Hooklib::Hook(PVOID api, void* newfunc)
+{
+    UNREFERENCED_PARAMETER(api);
+    UNREFERENCED_PARAMETER(newfunc);
+    Log("[TIDAOJI] Hooklib::Hook frozen (IH production)\r\n");
+    return 0;
+}
+
+bool Hooklib::Hook(HOOK hook)
+{
+    UNREFERENCED_PARAMETER(hook);
+    Log("[TIDAOJI] Hooklib::Hook(HOOK) frozen (IH production)\r\n");
+    return false;
+}
+
+bool Hooklib::Unhook(HOOK hook, bool free)
+{
+    UNREFERENCED_PARAMETER(hook);
+    UNREFERENCED_PARAMETER(free);
+    Log("[TIDAOJI] Hooklib::Unhook frozen (IH production)\r\n");
+    return false;
+}
+
+#else // TIDAOJI_ALLOW_SSDT_FALLBACK
+
 static HOOK hook_internal(ULONG_PTR addr, void* newfunc)
 {
     //allocate structure
@@ -54,3 +83,5 @@ bool Hooklib::Unhook(HOOK hook, bool free)
     }
     return false;
 }
+
+#endif // TIDAOJI_ALLOW_SSDT_FALLBACK

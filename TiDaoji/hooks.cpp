@@ -1003,9 +1003,10 @@ int Hooks::Initialize()
     }
 
     // 3) Running: ConflictProbe inside Start; hard-fail dual InfinityHook
+    // 失败原因见 k_hook 日志：reason=ConflictProbe | EnableCkcl | InstallClocks | ...
     if(!k_hook::Start())
     {
-        Log("[TIDAOJI] k_hook::Start failed (conflict or install)\r\n");
+        Log("[TIDAOJI] k_hook::Start failed — see prior Start: FAIL reason= (unload CR dual-IH / rebuild pattern)\r\n");
         k_hook::Cleanup(); // not Stop(): IsStarted may still be false
         return 0;
     }

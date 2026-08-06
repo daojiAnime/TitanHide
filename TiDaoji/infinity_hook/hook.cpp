@@ -312,7 +312,10 @@ namespace k_hook
 
 		// CKCL session must exist so logger context is valid (no SYSTEMCALL flag)
 		if (!EnsureCkclSessionRunning())
+		{
+			Log("Init FAIL build=%ld symbol=CKCL session", m_BuildNumber);
 			return false;
+		}
 
 		unsigned long long EtwpDebuggerData =
 			k_utils::FindPatternImage(ntoskrnl, "\x00\x00\x2c\x08\x04\x38\x0c", "??xxxxx", ".text");
@@ -324,18 +327,24 @@ namespace k_hook
 				k_utils::FindPatternImage(ntoskrnl, "\x00\x00\x2c\x08\x04\x38\x0c", "??xxxxx", ".rdata");
 		if (!EtwpDebuggerData)
 		{
-			Log("EtwpDebuggerData not found");
+			Log("Init FAIL build=%ld symbol=EtwpDebuggerData", m_BuildNumber);
 			return false;
 		}
 		m_EtwpDebuggerData = (void*)EtwpDebuggerData;
 
 		m_EtwpDebuggerDataSilo = *(void***)((unsigned long long)m_EtwpDebuggerData + 0x10);
 		if (!m_EtwpDebuggerDataSilo)
+		{
+			Log("Init FAIL build=%ld symbol=EtwpDebuggerDataSilo", m_BuildNumber);
 			return false;
+		}
 
 		m_CkclWmiLoggerContext = m_EtwpDebuggerDataSilo[0x2];
 		if (!m_CkclWmiLoggerContext)
+		{
+			Log("Init FAIL build=%ld symbol=CkclWmiLoggerContext", m_BuildNumber);
 			return false;
+		}
 
 		if (m_BuildNumber <= 7601 || m_BuildNumber >= 22000)
 			m_GetCpuClock = (void**)((unsigned long long)m_CkclWmiLoggerContext + 0x18);
@@ -343,15 +352,21 @@ namespace k_hook
 			m_GetCpuClock = (void**)((unsigned long long)m_CkclWmiLoggerContext + 0x28);
 
 		if (!MmIsAddressValid(m_GetCpuClock))
+		{
+			Log("Init FAIL build=%ld symbol=GetCpuClock slot invalid", m_BuildNumber);
 			return false;
+		}
 
 		m_StockGetCpuClock = (unsigned long long)(*m_GetCpuClock);
 		m_OriginalGetCpuClock = m_StockGetCpuClock;
-		Log("GetCpuClock slot %p stock %p", m_GetCpuClock, (void*)m_StockGetCpuClock);
+		Log("GetCpuClock slot %p stock %p build=%ld", m_GetCpuClock, (void*)m_StockGetCpuClock, m_BuildNumber);
 
 		m_SystemCallTable = PAGE_ALIGN(k_utils::GetSyscallEntry(ntoskrnl));
 		if (!m_SystemCallTable)
+		{
+			Log("Init FAIL build=%ld symbol=SystemCallTable", m_BuildNumber);
 			return false;
+		}
 
 		if (m_BuildNumber > 18363)
 		{
@@ -360,7 +375,7 @@ namespace k_hook
 				"xxx????xxx?xxx????xxx");
 			if (!addressHvlpReferenceTscPage)
 			{
-				Log("HvlpReferenceTscPage not found");
+				Log("Init FAIL build=%ld symbol=HvlpReferenceTscPage", m_BuildNumber);
 				return false;
 			}
 			m_HvlpReferenceTscPage = reinterpret_cast<unsigned long long>(
@@ -380,7 +395,7 @@ namespace k_hook
 			}
 			if (!addressHvlGetQpcBias)
 			{
-				Log("HvlGetQpcBias not found");
+				Log("Init FAIL build=%ld symbol=HvlGetQpcBias", m_BuildNumber);
 				return false;
 			}
 			m_HvlGetQpcBias = reinterpret_cast<unsigned long long>(
@@ -401,7 +416,7 @@ namespace k_hook
 			}
 			if (!addressHvlpGetReferenceTimeUsingTscPage)
 			{
-				Log("HvlpGetReferenceTimeUsingTscPage not found");
+				Log("Init FAIL build=%ld symbol=HvlpGetReferenceTimeUsingTscPage", m_BuildNumber);
 				return false;
 			}
 			m_HvlpGetReferenceTimeUsingTscPage = (unsigned long long)(
@@ -417,7 +432,7 @@ namespace k_hook
 				"xxx????xxxxxxx?xx");
 			if (!addressHalpPerformanceCounter)
 			{
-				Log("HalpPerformanceCounter not found");
+				Log("Init FAIL build=%ld symbol=HalpPerformanceCounter", m_BuildNumber);
 				return false;
 			}
 			m_HalpPerformanceCounter = reinterpret_cast<unsigned long long>(
@@ -436,7 +451,7 @@ namespace k_hook
 					"xxx????x????xxx");
 				if (!addressHalpOriginalPerformanceCounter)
 				{
-					Log("HalpOriginalPerformanceCounter not found");
+					Log("Init FAIL build=%ld symbol=HalpOriginalPerformanceCounter", m_BuildNumber);
 					return false;
 				}
 			}
@@ -757,13 +772,15 @@ namespace k_hook
 		// Cold start
 		if (ConflictProbe())
 		{
-			Log("Start: ConflictProbe failed");
+			// 与 CR 等第二套 InfinityHook 并存：硬失败（设计 K19 / 互斥）
+			Log("Start: FAIL reason=ConflictProbe (foreign IH / clock owner)");
 			KeReleaseGuardedMutex(&m_LifeMutex);
 			return false;
 		}
 
 		if (!EnableCkclSyscall())
 		{
+			Log("Start: FAIL reason=EnableCkclSyscall");
 			RollbackStartPartial_NoLock();
 			KeReleaseGuardedMutex(&m_LifeMutex);
 			return false;
@@ -772,6 +789,7 @@ namespace k_hook
 		// Re-resolve GetCpuClock slot after enabling SYSTEMCALL (context may update)
 		if (!MmIsAddressValid(m_GetCpuClock))
 		{
+			Log("Start: FAIL reason=GetCpuClock invalid after CKCL");
 			RollbackStartPartial_NoLock();
 			KeReleaseGuardedMutex(&m_LifeMutex);
 			return false;
@@ -780,6 +798,7 @@ namespace k_hook
 
 		if (!InstallClocks())
 		{
+			Log("Start: FAIL reason=InstallClocks (pattern/slot write)");
 			RollbackStartPartial_NoLock();
 			KeReleaseGuardedMutex(&m_LifeMutex);
 			return false;
@@ -787,6 +806,7 @@ namespace k_hook
 
 		if (!EnsureDetectThread_NoLock())
 		{
+			Log("Start: FAIL reason=EnsureDetectThread");
 			RollbackStartPartial_NoLock();
 			KeReleaseGuardedMutex(&m_LifeMutex);
 			return false;
