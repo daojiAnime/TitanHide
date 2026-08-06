@@ -136,6 +136,8 @@ static PVOID FindCaveAddress(PVOID CodeStart, ULONG CodeSize, ULONG CaveSize)
 }
 #endif //_WIN64
 
+// PR3: production hide no longer calls SSDT::Hook / Unhook (InfinityHook only).
+// Keep write APIs for optional legacy/tools; GetFunctionAddress remains the live path.
 HOOK SSDT::Hook(const char* apiname, void* newfunc)
 {
     SSDTStruct* SSDT = SSDTfind();

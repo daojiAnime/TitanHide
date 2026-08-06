@@ -1,4 +1,4 @@
-# TiDaoji InfinityHook (PR2)
+# TiDaoji InfinityHook (PR2 engine / PR3 wired)
 
 Port of CR `infinity_hook_pro` with lifecycle fixes (design K13/K17/K18/K19).
 
@@ -15,10 +15,9 @@ Port of CR `infinity_hook_pro` with lifecycle fixes (design K13/K17/K18/K19).
 
 ## PR2 vs PR3
 
-- **PR2**: engine compiles into `TiDaoji.sys`; production hide still **SSDT**.
-- **PR3**: `Hooks::Initialize` switches to `k_hook::Start` + pointer-swap callback.
-
-Optional self-test: compile with `TIDAOJI_IH_SELFTEST` (DriverEntry Start→Stop).
+- **PR2**: engine compiles into `TiDaoji.sys`; production hide still SSDT.
+- **PR3**: `Hooks::Initialize` → resolve SSDT originals → `k_hook::Initialize(TiDaojiSyscallCallback)` → `Start()`.  
+  Callback: pointer equality vs saved originals → swap to `HookNt*`. No SSDT table write.
 
 ## Pool tag
 

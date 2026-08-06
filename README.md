@@ -1,13 +1,12 @@
 # TiDaoji
 
-> **⚠️ NOT PG-SAFE (PR2)** — **生产 hide 仍是 SSDT + hooklib**。  
-> InfinityHook 引擎已 **vendor 进 `TiDaoji/infinity_hook/`**（`IsStarted`/`Repair`/`Cleanup` 已修），**尚未接线** hide（PR3）。  
-> **禁止**在「DSU restore 后长跑」工作流上当完成品。  
+> **⚠️ NOT PG-SAFE (PR3)** — 生产 hide 已接 **InfinityHook**（`k_hook`），**不再**走 SSDT 表写 / hooklib 内联补丁。  
+> **仍不称 PG-safe**：层 B（CKCL SYSTEMCALL + GetCpuClock/Hvl/Halp）在驱动存活全程 long-lived。  
 > 设计：`docs/2026-08-06-tidaoji-infinityhook-design.md`  
-> 经典风险：SSDT 路径 → `0x109`；IH 层 B 长驻 CKCL/时钟指针也 **不称** PG-safe。
+> 残余风险：IH 栈/pattern 失效、与其它 InfinityHook（如 CR）冲突、Unload 竞态、未来 PG 规则变化。
 
 TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉并 **全量改名**，用于在特定进程上隐藏调试器痕迹。  
-通过 hook 多个 `Nt*`（当前仍为 SSDT）并改写返回值；向驱动写入 `HIDE_INFO`（PID + Type 位掩码）启用保护。
+通过 InfinityHook 每 syscall 栈上指针交换拦截多个 `Nt*`，并改写返回值；向驱动写入 `HIDE_INFO`（PID + Type 位掩码）启用保护。
 
 ## 身份面（PR1）
 
@@ -29,6 +28,7 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 - ThreadHideFromDebugger
 - Protect DRx (NtGetContextThread / NtSetContextThread)
 - SystemFirmwareVMScrub (`HideNtSystemVMInformation`, BIT 11) — 来自 lityrgia 选择性合并
+- Hook 引擎：**InfinityHook**（PR3）；SSDT `GetFunctionAddress` 仅用于解析原件
 
 ## Compiling
 
@@ -60,13 +60,14 @@ x64dbg：
 TiDaojiName NotTiDaoji
 ```
 
-## DSU 工作流（设计目标；**PR1 尚未换引擎**）
+## DSU 工作流（画像 A）
 
-画像 **A（用户已拍板）**：仅临时放开 **DSE** 装载，装完立即 restore；**PG 保持开启**。  
-在 PR3（InfinityHook 接线）之前，**不要**在此工作流下长时间跑 PR1 二进制。
+**画像 A（已拍板）**：仅临时放开 **DSE** 装载，装完立即 restore；**PG 保持开启**。  
+`sc start` → InfinityHook `Start`（层 B 生效）→ Hide → **立即 restore DSE**。  
+Restore **不**卸载驱动、**不**撤销层 B；hide 依赖仍存活的 IH 改写——有意取舍，不是“系统已干净”。
 
 ## Remarks
 
-- 与 CR 等其它 InfinityHook 实例 **互斥**（PR3 起硬失败）。  
+- 与 CR 等其它 InfinityHook 实例 **互斥**（`ConflictProbe` 硬失败）。  
 - **Never run on production; always VM.**  
 - Upstream: original TitanHide project by mrexodia.

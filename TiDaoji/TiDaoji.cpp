@@ -5,15 +5,8 @@
 #include "log.h"
 #include "ntdll.h"
 #include "threadhidefromdbg.h"
-// PR2: InfinityHook engine is linked but production hide still uses SSDT (hooks.cpp).
-// PR3 will wire k_hook::Start to replace SSDT. Cleanup is always safe (no-op if idle).
+// PR3: production hide is InfinityHook (k_hook). SSDT write path is unused.
 #include "infinity_hook/hook.h"
-
-#if defined(TIDAOJI_IH_SELFTEST)
-static void __fastcall TiDaojiIhNoopCallback(unsigned long, PVOID*)
-{
-}
-#endif
 
 static UNICODE_STRING DeviceName;
 static wchar_t DeviceNameBuffer[256];
@@ -22,13 +15,17 @@ static wchar_t Win32DeviceBuffer[256];
 
 static void DriverUnload(IN PDRIVER_OBJECT DriverObject)
 {
-    // PR2: tear down InfinityHook layer B if a self-test/Start left it running.
-    // Production hide is still SSDT until PR3; Cleanup is idempotent.
-    k_hook::Cleanup();
+    // Order: stop IH first → drain inflight syscalls → delete device → NTDLL
+    Hooks::Deinitialize(); // k_hook::Cleanup()
+
+    {
+        LARGE_INTEGER delay;
+        delay.QuadPart = -1LL * 1000 * 1000 * 10; // 1s relative
+        KeDelayExecutionThread(KernelMode, FALSE, &delay);
+    }
 
     IoDeleteSymbolicLink(&Win32Device);
     IoDeleteDevice(DriverObject->DeviceObject);
-    Hooks::Deinitialize();
     NTDLL::Deinitialize();
 }
 
@@ -80,6 +77,13 @@ static NTSTATUS DriverWrite(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
     return RetStatus;
 }
 
+static void TeardownDevice(IN PDRIVER_OBJECT DriverObject)
+{
+    IoDeleteSymbolicLink(&Win32Device);
+    if(DriverObject->DeviceObject)
+        IoDeleteDevice(DriverObject->DeviceObject);
+}
+
 extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRING RegistryPath)
 {
     // Initialize name buffers
@@ -90,13 +94,13 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
 
     // Derive the device name and symbolic link from the registry path
     UNICODE_STRING DriverName = {};
-    if (RegistryPath != NULL && RegistryPath->Buffer != NULL)
+    if(RegistryPath != NULL && RegistryPath->Buffer != NULL)
     {
         const USHORT CharacterCount = (USHORT)(RegistryPath->Length / sizeof(WCHAR));
-        for (USHORT i = 0; i < CharacterCount; i++)
+        for(USHORT i = 0; i < CharacterCount; i++)
         {
             USHORT index = CharacterCount - i - 1;
-            if (RegistryPath->Buffer[index] == L'\\')
+            if(RegistryPath->Buffer[index] == L'\\')
             {
                 index++; // skip the backslash
                 DriverName.Buffer = RegistryPath->Buffer + index;
@@ -108,7 +112,7 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     }
 
     // Fall back to default driver name
-    if (DriverName.Length == 0)
+    if(DriverName.Length == 0)
     {
         RtlInitUnicodeString(&DriverName, L"TiDaoji");
     }
@@ -141,6 +145,7 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     if(!Undocumented::UndocumentedInit())
     {
         Log("[TIDAOJI] UndocumentedInit() failed...\r\n");
+        NTDLL::Deinitialize();
         return STATUS_UNSUCCESSFUL;
     }
     Log("[TIDAOJI] UndocumentedInit() was successful!\r\n");
@@ -150,6 +155,7 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     if(!NT_SUCCESS(status))
     {
         Log("[TIDAOJI] FindCrossThreadFlagsOffset() failed: 0x%lX\r\n", status);
+        NTDLL::Deinitialize();
         return status;
     }
 
@@ -164,11 +170,13 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     if(!NT_SUCCESS(status))
     {
         Log("[TIDAOJI] IoCreateDevice Error...\r\n");
+        NTDLL::Deinitialize();
         return status;
     }
     if(!DeviceObject)
     {
         Log("[TIDAOJI] Unexpected I/O Error...\r\n");
+        NTDLL::Deinitialize();
         return STATUS_UNEXPECTED_IO_ERROR;
     }
     Log("[TIDAOJI] Device %.*ws created successfully!\r\n", DeviceName.Length / sizeof(WCHAR), DeviceName.Buffer);
@@ -180,30 +188,23 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     if(!NT_SUCCESS(status))
     {
         Log("[TIDAOJI] IoCreateSymbolicLink Error...\r\n");
+        IoDeleteDevice(DeviceObject);
+        NTDLL::Deinitialize();
         return status;
     }
     Log("[TIDAOJI] Symbolic link %.*ws->%.*ws created!\r\n", Win32Device.Length / sizeof(WCHAR), Win32Device.Buffer, DeviceName.Length / sizeof(WCHAR), DeviceName.Buffer);
 
-    //initialize hooking (SSDT path — PR1/PR2 production)
-    Log("[TIDAOJI] Hooks::Initialize() hooked %d functions\r\n", Hooks::Initialize());
-
-#if defined(TIDAOJI_IH_SELFTEST)
-    // Optional PR2 smoke: Ready → Start → Stop → Cleanup. Not for production hide.
+    // PR3: InfinityHook hide — fail hard on 0 so CKCL/layer B never half-armed
+    const int hooked = Hooks::Initialize();
+    if(hooked <= 0)
     {
-        if (k_hook::Initialize(&TiDaojiIhNoopCallback) && k_hook::Start())
-        {
-            Log("[TIDAOJI] IH selftest Start OK LayerB=%d\r\n", k_hook::LayerBIntact() ? 1 : 0);
-            k_hook::Stop();
-            k_hook::Cleanup();
-            Log("[TIDAOJI] IH selftest Stop/Cleanup done\r\n");
-        }
-        else
-        {
-            Log("[TIDAOJI] IH selftest Initialize/Start FAILED\r\n");
-            k_hook::Cleanup();
-        }
+        Log("[TIDAOJI] Hooks::Initialize failed (%d) — abort load\r\n", hooked);
+        k_hook::Cleanup(); // idempotent; covers Start-fail residual
+        TeardownDevice(DriverObject);
+        NTDLL::Deinitialize();
+        return STATUS_UNSUCCESSFUL;
     }
-#endif
+    Log("[TIDAOJI] Hooks::Initialize armed %d functions (InfinityHook)\r\n", hooked);
 
     return STATUS_SUCCESS;
 }

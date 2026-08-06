@@ -4,18 +4,21 @@
 #include "hider.h"
 #include "misc.h"
 #include "log.h"
+#include "infinity_hook/hook.h"
 
-static HOOK hNtQueryInformationProcess = 0;
-static HOOK hNtQueryInformationThread = 0;
-static HOOK hNtQueryObject = 0;
-static HOOK hNtQuerySystemInformation = 0;
-static HOOK hNtClose = 0;
-static HOOK hNtDuplicateObject = 0;
-static HOOK hNtSetInformationThread = 0;
-static HOOK hNtGetContextThread = 0;
-static HOOK hNtSetContextThread = 0;
-static HOOK hNtSystemDebugControl = 0;
-static HOOK hNtCreateThreadEx = 0;
+// PR3: SSDT-slot originals for InfinityHook pointer-match only.
+// Must NOT use MmGetSystemRoutineAddress (export path may differ from SSDT).
+static PVOID g_NtQIP = nullptr;
+static PVOID g_NtQIT = nullptr;
+static PVOID g_NtQO = nullptr;
+static PVOID g_NtQSI = nullptr;
+static PVOID g_NtSIT = nullptr;
+static PVOID g_NtClose = nullptr;
+static PVOID g_NtDup = nullptr;
+static PVOID g_NtGCT = nullptr;
+static PVOID g_NtSCT = nullptr;
+static PVOID g_NtSDBC = nullptr;
+static PVOID g_NtCTX = nullptr; // NtCreateThreadEx, Vista+ only
 static KMUTEX gDebugPortMutex;
 
 //https://forum.tuts4you.com/topic/40011-debugme-vmprotect-312-build-886-anti-debug-method-improved/#comment-192824
@@ -910,63 +913,110 @@ static NTSTATUS NTAPI HookNtCreateThreadEx(
     return Undocumented::NtCreateThreadEx(ThreadHandle, DesiredAccess, ObjectAttributes, ProcessHandle, StartRoutine, Argument, CreateFlags, ZeroBits, StackSize, MaximumStackSize, AttributeList);
 }
 
+// InfinityHook per-syscall stack swap: pointer equality only (all SSDT, no win32k filter).
+static void __fastcall TiDaojiSyscallCallback(unsigned long nCallIndex, PVOID* pCallAddress)
+{
+    UNREFERENCED_PARAMETER(nCallIndex);
+    if(!pCallAddress || !*pCallAddress)
+        return;
+
+    const PVOID addr = *pCallAddress;
+    if(addr == g_NtQIP)
+        *pCallAddress = (PVOID)&HookNtQueryInformationProcess;
+    else if(addr == g_NtQIT)
+        *pCallAddress = (PVOID)&HookNtQueryInformationThread;
+    else if(addr == g_NtQO)
+        *pCallAddress = (PVOID)&HookNtQueryObject;
+    else if(addr == g_NtQSI)
+        *pCallAddress = (PVOID)&HookNtQuerySystemInformation;
+    else if(addr == g_NtSIT)
+        *pCallAddress = (PVOID)&HookNtSetInformationThread;
+    else if(addr == g_NtClose)
+        *pCallAddress = (PVOID)&HookNtClose;
+    else if(addr == g_NtDup)
+        *pCallAddress = (PVOID)&HookNtDuplicateObject;
+    else if(addr == g_NtGCT)
+        *pCallAddress = (PVOID)&HookNtGetContextThread;
+    else if(addr == g_NtSCT)
+        *pCallAddress = (PVOID)&HookNtSetContextThread;
+    else if(addr == g_NtSDBC)
+        *pCallAddress = (PVOID)&HookNtSystemDebugControl;
+    else if(g_NtCTX && addr == g_NtCTX)
+        *pCallAddress = (PVOID)&HookNtCreateThreadEx;
+}
+
+// Resolve all hide targets from SSDT slots. Count: 11 if Vista+, else 10.
+static bool ResolveAllOrigPointers()
+{
+    g_NtQIP = SSDT::GetFunctionAddress("NtQueryInformationProcess");
+    g_NtQIT = SSDT::GetFunctionAddress("NtQueryInformationThread");
+    g_NtQO = SSDT::GetFunctionAddress("NtQueryObject");
+    g_NtQSI = SSDT::GetFunctionAddress("NtQuerySystemInformation");
+    g_NtSIT = SSDT::GetFunctionAddress("NtSetInformationThread");
+    g_NtClose = SSDT::GetFunctionAddress("NtClose");
+    g_NtDup = SSDT::GetFunctionAddress("NtDuplicateObject");
+    g_NtGCT = SSDT::GetFunctionAddress("NtGetContextThread");
+    g_NtSCT = SSDT::GetFunctionAddress("NtSetContextThread");
+    g_NtSDBC = SSDT::GetFunctionAddress("NtSystemDebugControl");
+
+    if(!g_NtQIP || !g_NtQIT || !g_NtQO || !g_NtQSI || !g_NtSIT ||
+            !g_NtClose || !g_NtDup || !g_NtGCT || !g_NtSCT || !g_NtSDBC)
+    {
+        Log("[TIDAOJI] ResolveAllOrigPointers: missing base Nt* SSDT address\r\n");
+        return false;
+    }
+
+    if((NtBuildNumber & 0xFFFF) >= 6000)
+    {
+        g_NtCTX = SSDT::GetFunctionAddress("NtCreateThreadEx");
+        if(!g_NtCTX)
+        {
+            Log("[TIDAOJI] ResolveAllOrigPointers: NtCreateThreadEx missing\r\n");
+            return false;
+        }
+    }
+    else
+    {
+        g_NtCTX = nullptr;
+    }
+    return true;
+}
+
 int Hooks::Initialize()
 {
     KeInitializeMutex(&gDebugPortMutex, 0);
-    int hook_count = 0;
-    hNtQueryInformationProcess = SSDT::Hook("NtQueryInformationProcess", (void*)HookNtQueryInformationProcess);
-    if(hNtQueryInformationProcess)
-        hook_count++;
-    hNtQueryInformationThread = SSDT::Hook("NtQueryInformationThread", (void*)HookNtQueryInformationThread);
-    if(hNtQueryInformationThread)
-        hook_count++;
-    hNtQueryObject = SSDT::Hook("NtQueryObject", (void*)HookNtQueryObject);
-    if(hNtQueryObject)
-        hook_count++;
-    hNtQuerySystemInformation = SSDT::Hook("NtQuerySystemInformation", (void*)HookNtQuerySystemInformation);
-    if(hNtQuerySystemInformation)
-        hook_count++;
-    hNtSetInformationThread = SSDT::Hook("NtSetInformationThread", (void*)HookNtSetInformationThread);
-    if(hNtSetInformationThread)
-        hook_count++;
-    hNtClose = SSDT::Hook("NtClose", (void*)HookNtClose);
-    if(hNtClose)
-        hook_count++;
-    hNtDuplicateObject = SSDT::Hook("NtDuplicateObject", (void*)HookNtDuplicateObject);
-    if(hNtDuplicateObject)
-        hook_count++;
-    hNtGetContextThread = SSDT::Hook("NtGetContextThread", (void*)HookNtGetContextThread);
-    if(hNtGetContextThread)
-        hook_count++;
-    hNtSetContextThread = SSDT::Hook("NtSetContextThread", (void*)HookNtSetContextThread);
-    if(hNtSetContextThread)
-        hook_count++;
-    hNtSystemDebugControl = SSDT::Hook("NtSystemDebugControl", (void*)HookNtSystemDebugControl);
-    if(hNtSystemDebugControl)
-        hook_count++;
-    if((NtBuildNumber & 0xFFFF) >= 6000)
+
+    const int expected = ((NtBuildNumber & 0xFFFF) >= 6000) ? 11 : 10;
+
+    // 1) Resolve SSDT originals before any layer-B rewrite
+    if(!ResolveAllOrigPointers())
     {
-        hNtCreateThreadEx = SSDT::Hook("NtCreateThreadEx", (void*)HookNtCreateThreadEx);
-        if(hNtCreateThreadEx)
-            hook_count++;
+        Log("[TIDAOJI] Hooks::Initialize resolve failed\r\n");
+        return 0;
     }
-    return hook_count;
+
+    // 2) Ready only (no CKCL / no clocks)
+    if(!k_hook::Initialize(&TiDaojiSyscallCallback))
+    {
+        Log("[TIDAOJI] k_hook::Initialize failed\r\n");
+        return 0;
+    }
+
+    // 3) Running: ConflictProbe inside Start; hard-fail dual InfinityHook
+    if(!k_hook::Start())
+    {
+        Log("[TIDAOJI] k_hook::Start failed (conflict or install)\r\n");
+        k_hook::Cleanup(); // not Stop(): IsStarted may still be false
+        return 0;
+    }
+
+    Log("[TIDAOJI] InfinityHook hide armed, targets=%d LayerB=%d\r\n",
+        expected, k_hook::LayerBIntact() ? 1 : 0);
+    return expected;
 }
 
 void Hooks::Deinitialize()
 {
-    SSDT::Unhook(hNtQueryInformationProcess, true);
-    SSDT::Unhook(hNtQueryInformationThread, true);
-    SSDT::Unhook(hNtQueryObject, true);
-    SSDT::Unhook(hNtQuerySystemInformation, true);
-    SSDT::Unhook(hNtSetInformationThread, true);
-    SSDT::Unhook(hNtClose, true);
-    SSDT::Unhook(hNtDuplicateObject, true);
-    SSDT::Unhook(hNtGetContextThread, true);
-    SSDT::Unhook(hNtSetContextThread, true);
-    SSDT::Unhook(hNtSystemDebugControl, true);
-    if((NtBuildNumber & 0xFFFF) >= 6000)
-    {
-        SSDT::Unhook(hNtCreateThreadEx, true);
-    }
+    // Unconditional teardown of layer B; no SSDT unhooks (production no longer writes SSDT)
+    k_hook::Cleanup();
 }
