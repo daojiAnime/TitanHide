@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Inject Windows SDK um/ucrt lib dirs for BuildTools-only MSBuild (no full VS IDE). -->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_TiDaojiKitLib Condition="'$(_TiDaojiKitLib)'==''">C:\Program Files (x86)\Windows Kits\10\lib\10.0.26100.0</_TiDaojiKitLib>
+    <_TiDaojiMsvcLib Condition="'$(_TiDaojiMsvcLib)'==''">D:\BuildTools\VC\Tools\MSVC\14.44.35207\lib</_TiDaojiMsvcLib>
+    <_TiDaojiUmArch Condition="'$(Platform)'=='x64'">x64</_TiDaojiUmArch>
+    <_TiDaojiUmArch Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x86'">x86</_TiDaojiUmArch>
+    <_TiDaojiUmArch Condition="'$(_TiDaojiUmArch)'==''">x64</_TiDaojiUmArch>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalLibraryDirectories>$(_TiDaojiMsvcLib)\$(_TiDaojiUmArch);$(_TiDaojiKitLib)\um\$(_TiDaojiUmArch);$(_TiDaojiKitLib)\ucrt\$(_TiDaojiUmArch);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>
+

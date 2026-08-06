@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- win-master: force WDK km includes/libs (toolset leaves KM_IncludePath empty). -->
+<!--
+  win-master: force WDK km includes/libs when toolset leaves KM_IncludePath empty.
+  ONLY apply to kernel Driver projects — usermode plugins must not link BufferOverflowK/ntoskrnl.
+-->
 <Project>
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(ConfigurationType)'=='Driver'">
     <WDKRoot>C:\Program Files (x86)\Windows Kits\10</WDKRoot>
     <WDKVer>10.0.26100.0</WDKVer>
     <WindowsTargetPlatformVersion>$(WDKVer)</WindowsTargetPlatformVersion>
@@ -12,7 +15,7 @@
     <IncludePath>$(KM_IncludePath);$(KIT_SHARED_IncludePath);$(IncludePath)</IncludePath>
     <LibraryPath>$(DDK_LIB_PATH);$(LibraryPath)</LibraryPath>
   </PropertyGroup>
-  <ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(ConfigurationType)'=='Driver'">
     <ClCompile>
       <AdditionalIncludeDirectories>$(KM_IncludePath);$(KIT_SHARED_IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
