@@ -13,21 +13,21 @@ static wchar_t DeviceNameBuffer[256];
 static UNICODE_STRING Win32Device;
 static wchar_t Win32DeviceBuffer[256];
 
-// Unload 后仍可能有 CPU 在 TiDaojiSyscallCallback / HookNt* 内。
-// Cleanup 已拆层 B，但没有 per-syscall 引用计数；固定 drain 降低 UAF 窗口（仍非形式化保证）。
-// 研究文档 P1：默认 5s（对齐 IHPM 10s 量级的一半）；可 -DTIDAOJI_UNLOAD_DRAIN_MS=10000 研究卸载。
+// After Cleanup, CPUs may still run TiDaojiSyscallCallback/HookNt*.
+// No per-syscall refcount; fixed drain shrinks UAF window (not formal).
+// Default 5s; override with -DTIDAOJI_UNLOAD_DRAIN_MS=10000 for research unload.
 #ifndef TIDAOJI_UNLOAD_DRAIN_MS
 #define TIDAOJI_UNLOAD_DRAIN_MS 5000
 #endif
 
 static void DriverUnload(IN PDRIVER_OBJECT DriverObject)
 {
-    // Order: stop IH first → drain inflight syscalls → delete device → NTDLL
+    // Order: stop IH first -> drain inflight syscalls -> delete device -> NTDLL
     Hooks::Deinitialize(); // k_hook::Cleanup()
 
     {
         LARGE_INTEGER delay;
-        // 相对超时：100ns 单位，负值 = 相对
+        // Relative timeout in 100ns units (negative = relative)
         delay.QuadPart = -(LONGLONG)TIDAOJI_UNLOAD_DRAIN_MS * 10000LL;
         Log("[TIDAOJI] Unload drain %d ms\r\n", TIDAOJI_UNLOAD_DRAIN_MS);
         KeDelayExecutionThread(KernelMode, FALSE, &delay);
@@ -203,11 +203,11 @@ extern "C" NTSTATUS DriverEntry(IN PDRIVER_OBJECT DriverObject, IN PUNICODE_STRI
     }
     Log("[TIDAOJI] Symbolic link %.*ws->%.*ws created!\r\n", Win32Device.Length / sizeof(WCHAR), Win32Device.Buffer, DeviceName.Length / sizeof(WCHAR), DeviceName.Buffer);
 
-    // PR3: InfinityHook hide — fail hard on 0 so CKCL/layer B never half-armed
+    // PR3: InfinityHook hide - fail hard on 0 so CKCL/layer B never half-armed
     const int hooked = Hooks::Initialize();
     if(hooked <= 0)
     {
-        Log("[TIDAOJI] Hooks::Initialize failed (%d) — abort load\r\n", hooked);
+        Log("[TIDAOJI] Hooks::Initialize failed (%d) - abort load\r\n", hooked);
         k_hook::Cleanup(); // idempotent; covers Start-fail residual
         TeardownDevice(DriverObject);
         NTDLL::Deinitialize();

@@ -745,7 +745,7 @@ void Deinitialize();
 
 1. ~~**DSU 确切工具与画像**~~ → **Resolved（K20）**：画像 **A（仅临时 DSE）**；PG 全程 on；接受层 B 在 PG 下残余风险。具体 DSU 二进制/命令行可在 PR5 补全，**不**再选 B。  
 2. ~~**仓库形态**~~ → **Resolved（K21）**：**原地 hard-rename** `/Users/daoji/Code/TitanHide`，保留同一 git 历史。  
-3. **Olly / TitanEngine**：本期是否随 PR1 一并改名发布？（PR1 矩阵含其字符串；可只改名不重点测）  
+3. ~~**Olly / TitanEngine**~~ → **Resolved（Rev 9）**：身份已改名；PR4 深度打磨（ini + `user_client.h` + 错误路径）；仍非 VMP 矩阵门禁  
 4. **日志路径**：仍 `C:\TiDaoji.log` 还是默认关文件日志？  
 5. ~~运行时互斥~~ → **已关闭**：PR3 硬失败。  
 6. **服务名随机化**：本期固定 `TiDaoji`；是否后续安装脚本随机名？  
@@ -828,8 +828,8 @@ void Deinitialize();
   - 插件 v2：`TiDaojiHelp` / `Status` / `UnhideAll`；Win32 错误；Type 位解码；PID 切换清 hide 标志；可重复 HidePid  
   - BridgeSetting：`TiDaoji/Options`（默认 `0x7FF`）、`DriverName`  
   - GUI：Driver/Type/LastPid 持久化 `.ini`；错误带 Win32 文本  
-  - Olly/TE：Open Question #3 **后置**（仅身份已改名，本期不重点打磨）  
-- **DoD（PR4）**：命令/GUI 可写 `HIDE_INFO`；设置持久化；帮助与 PR1 名一致 — **不以实机矩阵为门禁**
+  - Olly/TE：**深度打磨** — `user_client.h`、ini DriverName/Type、错误上报、默认 Type `0x7FF`、TE v2.0  
+- **DoD（PR4）**：x64dbg/GUI/Olly/TE 均可写 `HIDE_INFO`；设置可持久化 — **不以实机矩阵为门禁**
 
 ### PR5 — 装载 Runbook — **done（与 PR4 同批）**
 
@@ -881,3 +881,4 @@ flowchart LR
 | Draft Rev 6 | 2026-08-06 | 关联研究：`docs/2026-08-06-infinityhook-lineage-newos-research.md`（IHPM/族谱/新系统；Claude §10.2） |
 | Draft Rev 7 | 2026-08-07 | **顺序拍板**：PR3 后先 **PR4 → PR5**；实机/VMP/支持矩阵 **最后**；不挡 PR4/5 合入 |
 | Draft Rev 8 | 2026-08-07 | **PR4+PR5 同批落地**：插件 v2 + GUI ini + DSU A runbook；Olly/TE 仍后置 |
+| Draft Rev 9 | 2026-08-07 | Olly/TE 深度打磨 + `user_client.h`；pr4-pr5 FF 合入 pr3 |

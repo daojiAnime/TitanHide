@@ -50,6 +50,8 @@
 | `TiDaoji.sys` | Release\|x64 内核驱动（InfinityHook 生产 hide） |
 | `TiDaoji.dp64` | x64dbg 插件（PR4：`TiDaojiHelp` / `Status` / …） |
 | `TiDaojiGUI.exe` | 可选 GUI |
+| `TiDaojiOlly.dll` | Olly1/2（`TiDaojiOlly.ini`：DriverName/Type） |
+| `TiDaojiTE.dll` | TitanEngine（`TiDaojiTE.ini`） |
 | `install_driver.bat` | 复制 + `sc create/start`（**仍需**已在 DSE 窗口内） |
 
 编译：VS2022 + WDK，打开 `TiDaoji.sln`。

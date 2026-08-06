@@ -56,6 +56,18 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 
 自动：系统断点 → hide；结束调试 → unhide。
 
+### OllyDbg / TitanEngine（PR4 深度打磨）
+
+| 插件 | 产物 | 配置 ini（DLL 同目录） |
+|------|------|------------------------|
+| Olly1/2 | `TiDaojiOlly.dll` | `TiDaojiOlly.ini` → `[TiDaoji] DriverName=` / `Type=` |
+| TitanEngine | `TiDaojiTE.dll` | `TiDaojiTE.ini` 同上 |
+
+- 创建进程 → `HidePid`；退出/POSTDEBUG → `UnhidePid`；首次断点 → 用户态 PEB hide  
+- 失败：`OutputDebugString` + **首次** MessageBox（带 Win32 码）  
+- 共享逻辑：`TiDaoji/user_client.h`  
+- 默认 `Type=0x7FF`（不再写 `0xFFFFFFFF` 未知位）
+
 ## Features
 
 - ProcessDebugFlags / ProcessDebugPort / ProcessDebugObjectHandle

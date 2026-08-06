@@ -170,5 +170,28 @@ else
   bad "README missing PR4/PR5 links"
 fi
 
+# --- 7. Olly / TitanEngine + shared user_client ---
+if [[ -f TiDaoji/user_client.h ]] \
+  && grep -qF 'TiDaojiUserCall' TiDaoji/user_client.h \
+  && grep -qF 'TIDAOJI_DEFAULT_TYPE' TiDaoji/user_client.h; then
+  pass "user_client.h present"
+else
+  bad "user_client.h missing"
+fi
+if grep -qF 'user_client.h' TiDaoji_OllyDbg/TiDaojiOlly.cpp \
+  && grep -qF 'TiDaojiUserCall' TiDaoji_OllyDbg/TiDaojiOlly.cpp \
+  && grep -qF '"TiDaojiOlly"' TiDaoji_OllyDbg/TiDaojiOlly.cpp; then
+  pass "Olly uses user_client + ini basename"
+else
+  bad "Olly polish incomplete"
+fi
+if grep -qF 'user_client.h' TiDaoji_TitanEngine/TiDaojiTE.cpp \
+  && grep -qF 'TiDaojiUserCall' TiDaoji_TitanEngine/TiDaojiTE.cpp \
+  && grep -qF '*titanPluginMajorVersion = 2' TiDaoji_TitanEngine/TiDaojiTE.cpp; then
+  pass "TitanEngine uses user_client v2"
+else
+  bad "TitanEngine polish incomplete"
+fi
+
 echo "=== summary fail=$fail ==="
 exit "$fail"
