@@ -19,6 +19,7 @@ static PVOID g_NtGCT = nullptr;
 static PVOID g_NtSCT = nullptr;
 static PVOID g_NtSDBC = nullptr;
 static PVOID g_NtCTX = nullptr; // NtCreateThreadEx, Vista+ only
+static PVOID g_NtTP = nullptr;  // NtTerminateProcess
 static KMUTEX gDebugPortMutex;
 
 //https://forum.tuts4you.com/topic/40011-debugme-vmprotect-312-build-886-anti-debug-method-improved/#comment-192824
@@ -888,6 +889,21 @@ static NTSTATUS NTAPI HookNtSystemDebugControl(
     return Undocumented::NtSystemDebugControl(Command, InputBuffer, InputBufferLength, OutputBuffer, OutputBufferLength, ReturnLength);
 }
 
+typedef NTSTATUS (NTAPI *pfnNtTerminateProcess)(HANDLE, NTSTATUS);
+
+static NTSTATUS NTAPI HookNtTerminateProcess(
+    IN HANDLE ProcessHandle OPTIONAL,
+    IN NTSTATUS ExitStatus)
+{
+    ULONG pid = (ULONG)(ULONG_PTR)PsGetCurrentProcessId();
+    if(Hider::IsHidden(pid, HideNtTerminateProcess))
+    {
+        Log("[TIDAOJI] NtTerminateProcess BLOCKED pid=%d exit=0x%08X\r\n", pid, ExitStatus);
+        return STATUS_SUCCESS;
+    }
+    return ((pfnNtTerminateProcess)g_NtTP)(ProcessHandle, ExitStatus);
+}
+
 static NTSTATUS NTAPI HookNtCreateThreadEx(
     OUT PHANDLE ThreadHandle,
     IN ACCESS_MASK DesiredAccess,
@@ -943,6 +959,8 @@ static void __fastcall TiDaojiSyscallCallback(unsigned long nCallIndex, PVOID* p
         *pCallAddress = (PVOID)&HookNtSystemDebugControl;
     else if(g_NtCTX && addr == g_NtCTX)
         *pCallAddress = (PVOID)&HookNtCreateThreadEx;
+    else if(g_NtTP && addr == g_NtTP)
+        *pCallAddress = (PVOID)&HookNtTerminateProcess;
 }
 
 // Resolve all hide targets from SSDT slots. Count: 11 if Vista+, else 10.
@@ -959,8 +977,10 @@ static bool ResolveAllOrigPointers()
     g_NtSCT = SSDT::GetFunctionAddress("NtSetContextThread");
     g_NtSDBC = SSDT::GetFunctionAddress("NtSystemDebugControl");
 
+    g_NtTP = SSDT::GetFunctionAddress("NtTerminateProcess");
+
     if(!g_NtQIP || !g_NtQIT || !g_NtQO || !g_NtQSI || !g_NtSIT ||
-            !g_NtClose || !g_NtDup || !g_NtGCT || !g_NtSCT || !g_NtSDBC)
+            !g_NtClose || !g_NtDup || !g_NtGCT || !g_NtSCT || !g_NtSDBC || !g_NtTP)
     {
         Log("[TIDAOJI] ResolveAllOrigPointers: missing base Nt* SSDT address\r\n");
         return false;
@@ -986,7 +1006,7 @@ int Hooks::Initialize()
 {
     KeInitializeMutex(&gDebugPortMutex, 0);
 
-    const int expected = ((NtBuildNumber & 0xFFFF) >= 6000) ? 11 : 10;
+    const int expected = ((NtBuildNumber & 0xFFFF) >= 6000) ? 12 : 11;
 
     // 1) Resolve SSDT originals before any layer-B rewrite
     if(!ResolveAllOrigPointers())

@@ -17,7 +17,9 @@ enum HIDE_TYPE
     HideNtSetContextThread = BIT(9), //NtSetContextThread
     HideNtSystemDebugControl = BIT(10), //NtSystemDebugControl
     // NtQuerySystemInformation(SystemFirmwareTableInformation) VM string scrub (lityrgia)
-    HideNtSystemVMInformation = BIT(11)
+    HideNtSystemVMInformation = BIT(11),
+    // Block NtTerminateProcess for hidden processes (VMP direct-syscall kill)
+    HideNtTerminateProcess = BIT(12)
 };
 
 enum HIDE_COMMAND

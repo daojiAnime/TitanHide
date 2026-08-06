@@ -9,5 +9,6 @@
 
 void TiDaojiInit(PLUG_INITSTRUCT* initStruct);
 void TiDaojiStop();
+void TiDaojiShowSettings();
 
 #endif // _TEST_H

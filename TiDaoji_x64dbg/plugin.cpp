@@ -3,13 +3,14 @@
 #include <stdio.h>
 #include <string>
 #include "../TiDaoji/TiDaoji.h"
+#include "resource.h"
 
 static DWORD pid = 0;
 static bool hidden = false;
 static std::string driverName = "TiDaoji";
 
-// Default: all known hide bits (BIT1..BIT11) for VMP-oriented sessions.
-static constexpr ULONG kDefaultHideType = 0x7FFu;
+// Default: all known hide bits (BIT1..BIT12) for VMP-oriented sessions.
+static constexpr ULONG kDefaultHideType = 0xFFFu;
 
 static ULONG GetTiDaojiOptions()
 {
@@ -54,6 +55,7 @@ static void DescribeType(ULONG type)
         { HideNtSetContextThread, "NtSetContextThread" },
         { HideNtSystemDebugControl, "NtSystemDebugControl" },
         { HideNtSystemVMInformation, "NtSystemVMInformation" },
+        { HideNtTerminateProcess, "NtTerminateProcess" },
     };
     bool any = false;
     for(const auto& e : table)
@@ -285,6 +287,95 @@ PLUG_EXPORT void CBSTOPDEBUG(CBTYPE cbType, PLUG_CB_STOPDEBUG* info)
     UNREFERENCED_PARAMETER(info);
     char* argv = "TiDaojiUnhide";
     cbTiDaojiUnhide(1, &argv);
+}
+
+// --- Settings dialog ---
+
+extern HINSTANCE g_hInst;
+
+struct CheckEntry { int id; ULONG bit; };
+static const CheckEntry kCheckMap[] = {
+    { IDC_CHK_PROCESSDEBUGFLAGS,        HideProcessDebugFlags },
+    { IDC_CHK_PROCESSDEBUGPORT,         HideProcessDebugPort },
+    { IDC_CHK_PROCESSDEBUGOBJECTHANDLE, HideProcessDebugObjectHandle },
+    { IDC_CHK_DEBUGOBJECT,              HideDebugObject },
+    { IDC_CHK_SYSTEMDEBUGGERINFO,       HideSystemDebuggerInformation },
+    { IDC_CHK_NTCLOSE,                  HideNtClose },
+    { IDC_CHK_THREADHIDEFROMDBG,        HideThreadHideFromDebugger },
+    { IDC_CHK_NTGETCONTEXTTHREAD,       HideNtGetContextThread },
+    { IDC_CHK_NTSETCONTEXTTHREAD,       HideNtSetContextThread },
+    { IDC_CHK_NTSYSTEMDEBUGCONTROL,     HideNtSystemDebugControl },
+    { IDC_CHK_NTSYSTEMVMINFO,           HideNtSystemVMInformation },
+    { IDC_CHK_NTTERMINATEPROCESS,       HideNtTerminateProcess },
+};
+
+static void SetAllChecks(HWND hDlg, BOOL state)
+{
+    for(const auto& e : kCheckMap)
+        CheckDlgButton(hDlg, e.id, state ? BST_CHECKED : BST_UNCHECKED);
+}
+
+static INT_PTR CALLBACK SettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM)
+{
+    switch(msg)
+    {
+    case WM_INITDIALOG:
+    {
+        ULONG opts = GetTiDaojiOptions();
+        for(const auto& e : kCheckMap)
+        {
+            if(opts & e.bit)
+                CheckDlgButton(hDlg, e.id, BST_CHECKED);
+        }
+        char buf[128];
+        if(pid)
+            snprintf(buf, sizeof buf, "PID: %u (0x%X)  %s", pid, pid, hidden ? "[hidden]" : "[not hidden]");
+        else
+            snprintf(buf, sizeof buf, "No debuggee attached");
+        SetDlgItemTextA(hDlg, IDC_LBL_PID, buf);
+        return TRUE;
+    }
+    case WM_COMMAND:
+        switch(LOWORD(wParam))
+        {
+        case IDC_BTN_SELALL:
+            SetAllChecks(hDlg, TRUE);
+            return TRUE;
+        case IDC_BTN_SELNONE:
+            SetAllChecks(hDlg, FALSE);
+            return TRUE;
+        case IDC_BTN_APPLY:
+        {
+            ULONG opts = 0;
+            for(const auto& e : kCheckMap)
+            {
+                if(IsDlgButtonChecked(hDlg, e.id) == BST_CHECKED)
+                    opts |= e.bit;
+            }
+            BridgeSettingSetUint("TiDaoji", "Options", opts);
+            _plugin_logprintf("[" PLUGIN_NAME "] Options set to 0x%08X\n", opts);
+            DescribeType(opts);
+            if(pid)
+            {
+                TiDaojiCall(HidePid);
+                hidden = true;
+            }
+            EndDialog(hDlg, IDOK);
+            return TRUE;
+        }
+        case IDCANCEL:
+            EndDialog(hDlg, IDCANCEL);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
+void TiDaojiShowSettings()
+{
+    DialogBoxParamA(g_hInst, MAKEINTRESOURCEA(IDD_SETTINGS),
+                    GuiGetWindowHandle(), SettingsDlgProc, 0);
 }
 
 void TiDaojiInit(PLUG_INITSTRUCT* initStruct)
