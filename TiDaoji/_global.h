@@ -14,6 +14,10 @@ extern "C"
 #include <ntddstor.h>
 #include <mountdev.h>
 #include <ntddvol.h>
+// Kernel ntstrsafe requires NTSTRSAFE_LIB + link ntstrsafe.lib (not CRT vsprintf)
+#ifndef NTSTRSAFE_LIB
+#define NTSTRSAFE_LIB
+#endif
 #include <ntstrsafe.h>
 #include <ntimage.h>
 

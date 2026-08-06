@@ -224,6 +224,7 @@
     <ClCompile Include="threadhidefromdbg.cpp" />
     <ClCompile Include="TiDaoji.cpp" />
     <ClCompile Include="infinity_hook\hook.cpp" />
+    <ClCompile Include="infinity_hook\utils.cpp" />
     <ClCompile Include="infinity_hook\hde\hde64.cpp" />
     <ClCompile Include="undocumented.cpp" />
     <ClCompile Include="_global.cpp" />

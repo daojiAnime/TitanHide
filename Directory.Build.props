@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- win-master: force WDK km includes/libs (toolset leaves KM_IncludePath empty). -->
+<Project>
+  <PropertyGroup>
+    <WDKRoot>C:\Program Files (x86)\Windows Kits\10</WDKRoot>
+    <WDKVer>10.0.26100.0</WDKVer>
+    <WindowsTargetPlatformVersion>$(WDKVer)</WindowsTargetPlatformVersion>
+    <KM_IncludePath>$(WDKRoot)\Include\$(WDKVer)\km</KM_IncludePath>
+    <KIT_SHARED_IncludePath>$(WDKRoot)\Include\$(WDKVer)\shared</KIT_SHARED_IncludePath>
+    <CRT_IncludePath>$(WDKRoot)\Include\$(WDKVer)\km</CRT_IncludePath>
+    <DDK_LIB_PATH>$(WDKRoot)\Lib\$(WDKVer)\km\x64\</DDK_LIB_PATH>
+    <IncludePath>$(KM_IncludePath);$(KIT_SHARED_IncludePath);$(IncludePath)</IncludePath>
+    <LibraryPath>$(DDK_LIB_PATH);$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(KM_IncludePath);$(KIT_SHARED_IncludePath);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(DDK_LIB_PATH);%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>%(AdditionalDependencies);$(WDKRoot)\Lib\$(WDKVer)\km\x64\ntoskrnl.lib;$(WDKRoot)\Lib\$(WDKVer)\km\x64\hal.lib;$(WDKRoot)\Lib\$(WDKVer)\km\x64\wmilib.lib;$(WDKRoot)\Lib\$(WDKVer)\km\x64\ntstrsafe.lib;$(WDKRoot)\Lib\$(WDKVer)\km\x64\BufferOverflowK.lib</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>
