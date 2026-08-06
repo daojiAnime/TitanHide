@@ -116,8 +116,23 @@ detections=0
 
 ---
 
-## 6. 修订
+## 6. 测后清理（2026-08-07 同日）
+
+| 动作 | 结果 |
+|------|------|
+| `sc stop TiDaoji` | STOPPED（IH 卸） |
+| `C:\TiDaoji_probe_*` / hold / go / log | 已删（矩阵已写入本文） |
+| `tools\*.obj`、KDU `NalDrv*` 落盘 | 已删 |
+| 僵尸 `TitanHide` SCM 项 | `sc delete`（sys 未在 drivers；防 dual-IH） |
+| `D:\src\TiDaoji\._*` mac 垃圾 | 已清 |
+| **保留** | `TiDaoji` 服务注册 + `drivers\TiDaoji.sys` + probe `.exe`（下次 L1 只需 DSE 窗口） |
+| 脚本 | `tools/cleanup_live_residuals.bat` |
+
+---
+
+## 7. 修订
 
 | Rev | 说明 |
 |-----|------|
 | 1 | 完成 A0 / A1 / B1 自检；记 KDU exit=1 与 P3/P4 局限 |
+| 2 | 测后清理 + residual 脚本 |

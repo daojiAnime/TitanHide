@@ -37,6 +37,10 @@ Or one-shot (expects `TiDaoji.sys` already built):
 tools\dse\load_tidaoji_profile_a.bat
 ```
 
+**KDU exit code:** success often returns **1** (not 0).  
+Do **not** chain raw `kdu.exe -dse 0 && sc start …` — the `&&` aborts.  
+Use `call dse_off.bat` (treats 0/1 as OK) or separate lines with `&`.
+
 `DSE_ON_VALUE` default **6** (observed stock `g_CiOptions` on Win10 19045). Override:
 
 ```bat
