@@ -36,13 +36,20 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 | 驱动文件 | `TiDaoji.sys` |
 | 服务名 | `TiDaoji`（= `\Device\TiDaoji` / `\\.\TiDaoji`） |
 | 日志 | `C:\TiDaoji.log` |
-| x64dbg 插件 | `TiDaoji.dp64` v2（PR4） |
+| x64dbg / x32dbg 插件 | `TiDaoji.dp64`（x64dbg）+ `TiDaoji.dp32`（x32dbg）；同一工程 `Release\|x64` / `Release\|Win32` |
 | GUI | `TiDaojiGUI.exe`（Type/Driver/PID 写 `.ini`） |
 | 装载 Runbook | `docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md`（PR5，画像 A） |
 
 > 用户口中的「管道名」在此实现为 **设备符号链接**（`\DosDevices\TiDaoji`），**不是** Windows Named Pipe。
 
-### x64dbg 插件命令（PR4）
+### x64dbg / x32dbg 插件（PR4）
+
+| 产物 | 调试器 | 放置目录（示例） |
+|------|--------|------------------|
+| `TiDaoji.dp64` | **x64dbg** | `x64dbg\x64\plugins\` |
+| `TiDaoji.dp32` | **x32dbg** | `x64dbg\x32\plugins\` |
+
+> 扩展名不同：`.dp64` ≠ `.dp32`。同一源码；内核驱动在 64 位 OS 上为 **x64 `TiDaoji.sys`**，x32dbg 调试 32 位进程时仍通过 `\\.\TiDaoji` 写同一驱动。
 
 | 命令 | 作用 |
 |------|------|

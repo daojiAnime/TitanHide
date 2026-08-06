@@ -293,12 +293,14 @@ TiDaoji 运维含义：研究机避免 S3/S4 长睡；不要当“时间源可�
 
 | 项 | 状态 |
 |----|------|
-| 本机 (macOS 开发仓) | **无** Win11 VM / win-master 自动矩阵 runner |
-| Live 22000 / 24H2 冒烟 | **env-blocked** — 未伪造通过格 |
-| 模板 | 下表保留；实验室填格后更新本小节日期 |
+| 本机 (macOS 开发仓) | 无本地 Win 内核 |
+| **win-master 实机 2026-08-07** | **OK** — Win10 **19045.7417** x64；KDU 临时 DSE → `sc start TiDaoji` → restore DSE=6；`tidaoji_smoke` Hide/Unhide；日志 `InfinityHook hide armed` + `HiderProcessData OK` |
+| Live 22000 / 24H2 | 仍 PENDING-ENV |
+| 模板 | 下表；19045 已填 |
 
 | Build | 环境 | Initialize | Start | Hide 冒烟 | 2h 无 0x109 | 备注 |
 |-------|------|------------|-------|-----------|-------------|------|
+| **19045** (10.0) | **物理机 win-master** | **OK** | **OK** | **OK** (smoke HidePid/UnhidePid) | 未跑 2h | KDU `-dse 0`→start→`-dse 6`；LayerB armed |
 | 19041/19044 | VM | PENDING-ENV | PENDING-ENV | PENDING-ENV | PENDING-ENV | |
 | 19044 + 近 CU | VM | PENDING-ENV | PENDING-ENV | PENDING-ENV | PENDING-ENV | Hvl 第二 pattern |
 | 22000 | VM | PENDING-ENV | PENDING-ENV | PENDING-ENV | PENDING-ENV | 0x18 槽；**优先** |
@@ -510,4 +512,28 @@ unlock
 
 ---
 
-**文档结束（Rev 2 landed）**
+## 附录 D — K23 IHPM detect_routine 策略采纳（2026-08-07）
+
+**决策**：采纳 IHPM/IHU 的 detect_routine 核心策略——hook 被剥时全量重解析
+CKCL 指针链（EtwpDebuggerDataSilo → CkclWmiLoggerContext → GetCpuClock），
+替代仅重装 clock 指针。
+
+**根因**：长时间运行 CKCL WMI_LOGGER_CONTEXT 可被系统重分配，旧
+`m_GetCpuClock` 变悬空指针，`InstallClocks()` 写入已释放内存 = 内存腐败 → BSOD。
+
+**参考来源**：
+- [InfinityHookProMax](https://github.com/ThomasonZhao/InfinityHookProMax) `hook.cpp:228-254`
+- [InfinityHook-Updated](https://github.com/ck0i/InfinityHook-Updated) `hook.cpp:155-181`
+- [Freebuf](https://www.freebuf.com/articles/system/278857.html)（HvlGetQpcBias 方案确认）
+- [everdox/InfinityHook Issue #18](https://github.com/everdox/InfinityHook/issues/18)（栈行走安全，本次不纳入）
+
+**实现**：`ReResolveCkclChain()` + `Repair_NoLock()` in `hook.cpp`。
+与 IHPM 的差异：我们只重解析动态指针链（ntoskrnl 内 pattern scan 结果不变），
+保留 KGUARDED_MUTEX 同步、全 build 覆盖（不仅 ≤18363）、状态机完整性。
+
+**不采纳**：
+- 整仓替换为 IHPM（仍为禁止项——我们架构更健壮）
+- Issue #18 的 `IoGetStackLimit` 修复（所有 IH 变体均未实现）
+- 看雪 `HalPrivateDispatchTable` 新方案（架构差异太大）
+
+**文档结束（Rev 3）**

@@ -738,6 +738,7 @@ void Deinitialize();
 | **K20** | **DSU 画像 A：仅临时 DSE；PG 全程开启**；接受 InfinityHook 层 B 在 PG 下 long-lived 风险 | 用户 2026-08-06 拍板；不走画像 B |
 | **K21** | **原地 hard-rename**：在 `/Users/daoji/Code/TitanHide` 内 TitanHide→TiDaoji，**同一 git 历史**；不新建平行仓库 | 用户 2026-08-06 拍板 |
 | **K22** | **实施顺序：先 PR1 rename only**；PR2 InfinityHook 另开 | 用户 2026-08-06 拍板 |
+| **K23** | **Repair 全量重解析 CKCL 链**（参考 [IHPM](https://github.com/ThomasonZhao/InfinityHookProMax) / [IHU](https://github.com/ck0i/InfinityHook-Updated) detect_routine），替代仅重装 clock 指针 | 长时间运行 CKCL context 被系统重分配，旧指针写入 = 内存腐败 → BSOD；IHPM/IHU 已验证方案 |
 
 ---
 

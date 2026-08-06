@@ -21,9 +21,15 @@ echo === TiDaojiGUI x64 ===
 "%MSB%" TiDaojiGUI\TiDaojiGUI.vcxproj /m /t:Rebuild /p:Configuration=Release /p:Platform=x64 %FORCEIMPORT% /v:minimal /nologo
 echo GUI=%ERRORLEVEL%
 
-echo === TiDaoji_x64dbg x64 ===
+echo === TiDaoji_x64dbg x64 (.dp64) ===
 "%MSB%" TiDaoji_x64dbg\TiDaoji_x64dbg.vcxproj /m /t:Rebuild /p:Configuration=Release /p:Platform=x64 %FORCEIMPORT% /v:minimal /nologo
-echo DBG=%ERRORLEVEL%
+echo DBG64=%ERRORLEVEL%
+
+echo === TiDaoji_x64dbg Win32 (.dp32 for x32dbg) ===
+call "D:\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=amd64 >nul
+"%MSB%" TiDaoji_x64dbg\TiDaoji_x64dbg.vcxproj /m /t:Rebuild /p:Configuration=Release /p:Platform=Win32 %FORCEIMPORT% /v:minimal /nologo
+echo DBG32=%ERRORLEVEL%
+call "D:\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64 >nul
 
 echo === TiDaoji_TitanEngine x64 ===
 "%MSB%" TiDaoji_TitanEngine\TiDaoji_TitanEngine.vcxproj /m /t:Rebuild /p:Configuration=Release /p:Platform=x64 %FORCEIMPORT% /v:minimal /nologo
@@ -37,6 +43,7 @@ echo OLLY=%ERRORLEVEL%
 echo === artifacts ===
 dir /s /b *.sys 2>nul
 dir /s /b *.dp64 2>nul
+dir /s /b *.dp32 2>nul
 dir /s /b *TiDaojiGUI.exe 2>nul
 dir /s /b *TiDaojiOlly.dll 2>nul
 dir /s /b *TiDaojiTE.dll 2>nul

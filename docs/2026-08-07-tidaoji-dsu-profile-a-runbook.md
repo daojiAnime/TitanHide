@@ -32,10 +32,10 @@
 
 | 角色 | 本机候选 / 填空 | 用途 |
 |------|-----------------|------|
-| DSE 窗口工具 | `DisabledDSE.exe` / DHS / ______ | 短暂允许未签名驱动装载 |
-| 进入 DSE 窗口 | 命令：`________________` | 装载前 |
-| restore DSE | 命令：`________________` | **Hide 后立即** |
-| 验证 DSE 已恢复 | 例：再装一未签名驱动应失败 / 工具自检：`________________` | **只证 DSE，不证 hook 已卸** |
+| DSE 窗口工具 | **win-master 已验证**：`D:\tools\kdu\kdu.exe`（亦可用 DisabledDSE/DHS） | 短暂允许未签名驱动装载 |
+| 进入 DSE 窗口 | `kdu.exe -dse 0` | 装载前 |
+| restore DSE | `kdu.exe -dse 6`（该机 g_CiOptions 常态为 6） | **start 成功后立即** |
+| 验证 DSE 已恢复 | `kdu -dse` 读回 / 再装未签名驱动应 577 | **只证 DSE，不证 hook 已卸** |
 | 内核日志 | DebugView 或 `C:\TiDaoji.log` | `[TIDAOJI]` / `[TIDAOJI][IH]` |
 | 用户态 | x64dbg + `TiDaoji.dp64` 或 `TiDaojiGUI.exe` | 写 `HIDE_INFO` |
 
@@ -82,8 +82,9 @@ sc query type= driver state= all | findstr /i "CR Sak Infinity"
 ### 3.2 进入 DSE 窗口
 
 ```bat
-REM PLACEHOLDER — 替换为本机工具
-REM DisabledDSE.exe ...
+cd /d D:\tools\kdu
+kdu.exe -dse 0
+REM 期望：DSE flags ... new value to be written: 0
 ```
 
 ### 3.3 安装并启动
@@ -113,8 +114,12 @@ sc query TiDaoji
 ### 3.4 立即 restore DSE
 
 ```bat
-REM PLACEHOLDER — 本机 restore 命令
+cd /d D:\tools\kdu
+kdu.exe -dse 6
+REM 期望：value: 0 -> 6
 ```
+
+**win-master 2026-08-07 实机记录**：start 后日志含 `InfinityHook hide armed` / `Hooks::Initialize armed`；`tools/tidaoji_smoke` 对 `\\.\TiDaoji` HidePid+UnhidePid 成功；DSE 已 restore 后服务仍 RUNNING。
 
 **验收 DSE（示例思路，按工具改）：**
 

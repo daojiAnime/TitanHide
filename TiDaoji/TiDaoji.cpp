@@ -81,7 +81,10 @@ static NTSTATUS DriverWrite(IN PDEVICE_OBJECT DeviceObject, IN PIRP Irp)
         RetStatus = STATUS_UNSUCCESSFUL;
     }
     Irp->IoStatus.Status = RetStatus;
-    Irp->IoStatus.Information = 0;
+    // Report bytes accepted so user-mode WriteFile lpNumberOfBytesWritten is non-zero on success
+    Irp->IoStatus.Information = NT_SUCCESS(RetStatus) && pIoStackIrp
+                                ? pIoStackIrp->Parameters.Write.Length
+                                : 0;
     IoCompleteRequest(Irp, IO_NO_INCREMENT);
     return RetStatus;
 }
