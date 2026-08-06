@@ -10,8 +10,8 @@
 #include "TiDaoji.h"
 
 #ifndef TIDAOJI_DEFAULT_TYPE
-// BIT(1)..BIT(11) inclusive
-#define TIDAOJI_DEFAULT_TYPE 0x7FFu
+// BIT(1)..BIT(12) inclusive (incl. NtTerminateProcess)
+#define TIDAOJI_DEFAULT_TYPE 0xFFFu
 #endif
 
 #ifndef TIDAOJI_DEFAULT_DRIVER

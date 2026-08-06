@@ -40,6 +40,10 @@ call "D:\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=x86 -host_arch=amd64 >nul
 "%MSB%" TiDaoji_OllyDbg\TiDaoji_OllyDbg.vcxproj /m /t:Rebuild /p:Configuration=Release /p:Platform=Win32 %FORCEIMPORT% /v:minimal /nologo
 echo OLLY=%ERRORLEVEL%
 
+echo === tools CLI (CE / scripts) ===
+cl /nologo /O2 /EHsc /I. /Fe:tools\tidaoji_cli.exe tools\tidaoji_cli.cpp
+echo CLI=%ERRORLEVEL%
+
 echo === artifacts ===
 dir /s /b *.sys 2>nul
 dir /s /b *.dp64 2>nul
@@ -47,4 +51,5 @@ dir /s /b *.dp32 2>nul
 dir /s /b *TiDaojiGUI.exe 2>nul
 dir /s /b *TiDaojiOlly.dll 2>nul
 dir /s /b *TiDaojiTE.dll 2>nul
+dir /b tools\tidaoji_cli.exe 2>nul
 endlocal

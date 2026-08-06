@@ -315,6 +315,26 @@ static void SetAllChecks(HWND hDlg, BOOL state)
         CheckDlgButton(hDlg, e.id, state ? BST_CHECKED : BST_UNCHECKED);
 }
 
+static void RefreshDeviceLabel(HWND hDlg)
+{
+    char name[128] = "";
+    GetDlgItemTextA(hDlg, IDC_EDT_DRIVER, name, sizeof(name));
+    if(name[0] == '\0')
+        strncpy_s(name, "TiDaoji", _TRUNCATE);
+    char path[160];
+    snprintf(path, sizeof path, "\\\\.\\%s", name);
+    HANDLE h = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0);
+    char buf[200];
+    if(h == INVALID_HANDLE_VALUE)
+        snprintf(buf, sizeof buf, "Device %s — OPEN FAIL (is TiDaoji.sys started?)", path);
+    else
+    {
+        CloseHandle(h);
+        snprintf(buf, sizeof buf, "Device %s — OPEN OK", path);
+    }
+    SetDlgItemTextA(hDlg, IDC_LBL_DEVICE, buf);
+}
+
 static INT_PTR CALLBACK SettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM)
 {
     switch(msg)
@@ -327,12 +347,14 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPAR
             if(opts & e.bit)
                 CheckDlgButton(hDlg, e.id, BST_CHECKED);
         }
+        SetDlgItemTextA(hDlg, IDC_EDT_DRIVER, driverName.c_str());
         char buf[128];
         if(pid)
             snprintf(buf, sizeof buf, "PID: %u (0x%X)  %s", pid, pid, hidden ? "[hidden]" : "[not hidden]");
         else
             snprintf(buf, sizeof buf, "No debuggee attached");
         SetDlgItemTextA(hDlg, IDC_LBL_PID, buf);
+        RefreshDeviceLabel(hDlg);
         return TRUE;
     }
     case WM_COMMAND:
@@ -344,8 +366,35 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPAR
         case IDC_BTN_SELNONE:
             SetAllChecks(hDlg, FALSE);
             return TRUE;
+        case IDC_BTN_PROBE:
+            RefreshDeviceLabel(hDlg);
+            return TRUE;
+        case IDC_BTN_SOFTUNLOAD:
+            if(MessageBoxA(hDlg,
+                           "SoftUnload tears down InfinityHook / device (L2/L3).\nContinue?",
+                           PLUGIN_NAME, MB_ICONWARNING | MB_YESNO) == IDYES)
+            {
+                char name[128] = "";
+                GetDlgItemTextA(hDlg, IDC_EDT_DRIVER, name, sizeof(name));
+                if(name[0])
+                {
+                    driverName = name;
+                    BridgeSettingSet("TiDaoji", "DriverName", driverName.c_str());
+                }
+                TiDaojiCall(SoftUnload);
+                hidden = false;
+                RefreshDeviceLabel(hDlg);
+            }
+            return TRUE;
         case IDC_BTN_APPLY:
         {
+            char name[128] = "";
+            GetDlgItemTextA(hDlg, IDC_EDT_DRIVER, name, sizeof(name));
+            if(name[0])
+            {
+                driverName = name;
+                BridgeSettingSet("TiDaoji", "DriverName", driverName.c_str());
+            }
             ULONG opts = 0;
             for(const auto& e : kCheckMap)
             {
@@ -353,13 +402,15 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPAR
                     opts |= e.bit;
             }
             BridgeSettingSetUint("TiDaoji", "Options", opts);
-            _plugin_logprintf("[" PLUGIN_NAME "] Options set to 0x%08X\n", opts);
+            _plugin_logprintf("[" PLUGIN_NAME "] Options set to 0x%08X driver=%s\n",
+                              opts, driverName.c_str());
             DescribeType(opts);
             if(pid)
             {
                 TiDaojiCall(HidePid);
                 hidden = true;
             }
+            RefreshDeviceLabel(hDlg);
             EndDialog(hDlg, IDOK);
             return TRUE;
         }

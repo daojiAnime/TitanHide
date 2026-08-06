@@ -18,4 +18,10 @@
 #define IDC_CHK_NTSYSTEMDEBUGCONTROL            1012
 #define IDC_CHK_NTGETCONTEXTTHREAD              1013
 #define IDC_CHK_NTSYSTEMVMINFORMATION           1014
+#define IDC_CHK_NTTERMINATEPROCESS              1015
+#define IDC_BTN_SOFTUNLOAD                      1016
+#define IDC_BTN_SELALL                          1017
+#define IDC_BTN_SELNONE                         1018
+#define IDC_BTN_STATUS                          1019
+#define IDC_LBL_STATUS                          1020
 #define IDC_EDT_DRIVER                          40000

@@ -37,7 +37,8 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 | 服务名 | `TiDaoji`（= `\Device\TiDaoji` / `\\.\TiDaoji`） |
 | 日志 | `C:\TiDaoji.log` |
 | x64dbg / x32dbg 插件 | `TiDaoji.dp64`（x64dbg）+ `TiDaoji.dp32`（x32dbg）；同一工程 `Release\|x64` / `Release\|Win32` |
-| GUI | `TiDaojiGUI.exe`（Type/Driver/PID 写 `.ini`） |
+| GUI | `TiDaojiGUI.exe`（Type/Driver/PID/SoftUnload，状态栏） |
+| CE | `tools/ce/TiDaoji.lua` + `tools/tidaoji_cli.exe`（菜单/面板/`onOpenProcess`） |
 | 装载 Runbook | `docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md`（PR5，画像 A） |
 
 > 用户口中的「管道名」在此实现为 **设备符号链接**（`\DosDevices\TiDaoji`），**不是** Windows Named Pipe。
@@ -51,17 +52,25 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 
 > 扩展名不同：`.dp64` ≠ `.dp32`。同一源码；内核驱动在 64 位 OS 上为 **x64 `TiDaoji.sys`**，x32dbg 调试 32 位进程时仍通过 `\\.\TiDaoji` 写同一驱动。
 
-| 命令 | 作用 |
-|------|------|
+| 命令 / 菜单 | 作用 |
+|-------------|------|
+| 菜单 **Hide / Unhide / Status / Settings / Help** | 点选即执行 |
 | `TiDaoji` | 对当前调试进程 `HidePid`（可重复下发） |
 | `TiDaojiUnhide` | `UnhidePid` |
 | `TiDaojiUnhideAll` | `UnhideAll` |
-| `TiDaojiOptions [n]` | 读/写 Type 位掩码（`BridgeSetting` `TiDaoji/Options`，默认 `0x7FF`） |
+| `TiDaojiSoftUnload` | L2/L3 SoftUnload |
+| `TiDaojiOptions [n]` | 读/写 Type 位掩码（`BridgeSetting` `TiDaoji/Options`，默认 **`0xFFF`**） |
 | `TiDaojiName [svc]` | 设备名（默认 `TiDaoji` → `\\.\TiDaoji`） |
 | `TiDaojiStatus` | 打开设备探针 + 会话状态 |
 | `TiDaojiHelp` | 帮助 |
 
+Settings UI：Type 勾选、Driver 名、Probe 设备、Apply&Hide、SoftUnload。  
 自动：系统断点 → hide；结束调试 → unhide。
+
+### Cheat Engine
+
+见 **`tools/ce/README.md`**：`TiDaoji.lua`（CE 内置窗体 UI）+ `tidaoji_cli.exe`。  
+CE 打开进程时可自动 `HidePid`；与 `TiDaojiGUI` / x64dbg 共用驱动。
 
 ### OllyDbg / TitanEngine（PR4 深度打磨）
 
@@ -73,7 +82,7 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 - 创建进程 → `HidePid`；退出/POSTDEBUG → `UnhidePid`；首次断点 → 用户态 PEB hide  
 - 失败：`OutputDebugString` + **首次** MessageBox（带 Win32 码）  
 - 共享逻辑：`TiDaoji/user_client.h`  
-- 默认 `Type=0x7FF`（不再写 `0xFFFFFFFF` 未知位）
+- 默认 `Type=0xFFF`（BIT1..BIT12，含 NtTerminateProcess）
 
 ## Features
 

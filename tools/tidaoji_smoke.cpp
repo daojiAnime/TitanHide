@@ -65,7 +65,7 @@ int main(int argc, char** argv)
 
     hi.Command = HidePid;
     hi.Pid = pid;
-    hi.Type = 0x7FFu;
+    hi.Type = 0xFFFu;
     if(!WriteFile(h, &hi, sizeof(hi), &written, nullptr))
     {
         printf("[!] HidePid WriteFile failed Win32=%lu written=%lu\n", GetLastError(), written);

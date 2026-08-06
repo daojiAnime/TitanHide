@@ -9,7 +9,14 @@ int hMenuDump;
 int hMenuStack;
 HINSTANCE g_hInst;
 
-#define MENU_SETTINGS 1
+enum
+{
+    MENU_HIDE = 1,
+    MENU_UNHIDE,
+    MENU_STATUS,
+    MENU_SETTINGS,
+    MENU_HELP,
+};
 
 PLUG_EXPORT bool pluginit(PLUG_INITSTRUCT* initStruct)
 {
@@ -34,12 +41,34 @@ PLUG_EXPORT void plugsetup(PLUG_SETUPSTRUCT* setupStruct)
 {
     hwndDlg = setupStruct->hwndDlg;
     hMenu = setupStruct->hMenu;
-    _plugin_menuaddentry(hMenu, MENU_SETTINGS, "&Settings...");
+    _plugin_menuaddentry(hMenu, MENU_HIDE, "&Hide debuggee");
+    _plugin_menuaddentry(hMenu, MENU_UNHIDE, "&Unhide debuggee");
+    _plugin_menuaddentry(hMenu, MENU_STATUS, "S&tatus");
+    _plugin_menuaddentry(hMenu, MENU_SETTINGS, "Se&ttings...");
+    _plugin_menuaddentry(hMenu, MENU_HELP, "&Help");
 }
 
 PLUG_EXPORT void CBMENUENTRY(CBTYPE cbType, PLUG_CB_MENUENTRY* info)
 {
     (void)cbType;
-    if(info->hEntry == MENU_SETTINGS)
+    switch(info->hEntry)
+    {
+    case MENU_HIDE:
+        DbgCmdExecDirect("TiDaoji");
+        break;
+    case MENU_UNHIDE:
+        DbgCmdExecDirect("TiDaojiUnhide");
+        break;
+    case MENU_STATUS:
+        DbgCmdExecDirect("TiDaojiStatus");
+        break;
+    case MENU_SETTINGS:
         TiDaojiShowSettings();
+        break;
+    case MENU_HELP:
+        DbgCmdExecDirect("TiDaojiHelp");
+        break;
+    default:
+        break;
+    }
 }

@@ -19,6 +19,10 @@
 #define IDC_BTN_APPLY                   2001
 #define IDC_BTN_SELALL                  2002
 #define IDC_BTN_SELNONE                 2003
+#define IDC_BTN_SOFTUNLOAD              2004
+#define IDC_BTN_PROBE                   2005
 #define IDC_LBL_PID                     3001
+#define IDC_LBL_DEVICE                  3002
+#define IDC_EDT_DRIVER                  3003
 
 #endif

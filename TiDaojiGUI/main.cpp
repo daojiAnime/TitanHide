@@ -4,6 +4,7 @@
 #include <utility>
 #include "resource.h"
 #include "..\TiDaoji\TiDaoji.h"
+#include "..\TiDaoji\user_client.h"
 
 static HINSTANCE hInst;
 static char iniPath[MAX_PATH];
@@ -21,6 +22,7 @@ static std::pair<int, HIDE_TYPE> gOptions[] =
     { IDC_CHK_NTSETCONTEXTTHREAD, HideNtSetContextThread },
     { IDC_CHK_NTSYSTEMDEBUGCONTROL, HideNtSystemDebugControl },
     { IDC_CHK_NTSYSTEMVMINFORMATION, HideNtSystemVMInformation },
+    { IDC_CHK_NTTERMINATEPROCESS, HideNtTerminateProcess },
 };
 
 static ULONG GetTypeDword(HWND hwndDlg)
@@ -43,6 +45,17 @@ static void ApplyTypeDword(HWND hwndDlg, ULONG type)
     }
 }
 
+static void SetAllChecks(HWND hwndDlg, BOOL on)
+{
+    for(const auto& option : gOptions)
+        CheckDlgButton(hwndDlg, option.first, on ? BST_CHECKED : BST_UNCHECKED);
+}
+
+static void SetStatus(HWND hwndDlg, const char* text)
+{
+    SetDlgItemTextA(hwndDlg, IDC_LBL_STATUS, text);
+}
+
 static void SaveUiState(HWND hwndDlg)
 {
     char driverName[256] = "";
@@ -58,60 +71,95 @@ static void SaveUiState(HWND hwndDlg)
     WritePrivateProfileStringA("TiDaoji", "LastPid", pidBuf, iniPath);
 }
 
-static void ShowWin32Error(HWND hwndDlg, const char* title)
+static void FillSettings(HWND hwndDlg, TiDaojiUserSettings* s)
 {
-    const DWORD err = GetLastError();
-    char* sys = nullptr;
-    FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                   nullptr, err, 0, (LPSTR)&sys, 0, nullptr);
-    char buf[512];
-    if(sys)
-        sprintf_s(buf, "%s\nWin32=%lu\n%s", title, err, sys);
-    else
-        sprintf_s(buf, "%s\nWin32=%lu", title, err);
-    if(sys)
-        LocalFree(sys);
-    MessageBoxA(hwndDlg, buf, "TiDaojiGUI", MB_ICONERROR);
+    char driverName[128] = "TiDaoji";
+    GetWindowTextA(GetDlgItem(hwndDlg, IDC_EDT_DRIVER), driverName, sizeof(driverName));
+    if(driverName[0] == '\0')
+        strncpy_s(driverName, TIDAOJI_DEFAULT_DRIVER, _TRUNCATE);
+    strncpy_s(s->DriverName, driverName, _TRUNCATE);
+    s->Type = GetTypeDword(hwndDlg);
+}
+
+static const char* CmdName(HIDE_COMMAND c)
+{
+    switch(c)
+    {
+    case HidePid: return "HidePid";
+    case UnhidePid: return "UnhidePid";
+    case UnhideAll: return "UnhideAll";
+    case SoftUnload: return "SoftUnload";
+    default: return "Cmd";
+    }
 }
 
 static void TiDaojiCall(HWND hwndDlg, HIDE_COMMAND Command)
 {
     SaveUiState(hwndDlg);
 
-    char driverName[256] = "\\\\.\\";
-    GetWindowTextA(GetDlgItem(hwndDlg, IDC_EDT_DRIVER), driverName + 4, sizeof(driverName) - 4);
-    if(driverName[4] == '\0')
+    TiDaojiUserSettings s;
+    FillSettings(hwndDlg, &s);
+    if(s.DriverName[0] == '\0')
     {
+        SetStatus(hwndDlg, "Status: driver name empty");
         MessageBoxA(hwndDlg, "Driver name empty (default TiDaoji)", "TiDaojiGUI", MB_ICONERROR);
         return;
     }
 
-    HANDLE hDevice = CreateFileA(driverName, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0);
-    if(hDevice == INVALID_HANDLE_VALUE)
+    if(Command == SoftUnload)
     {
-        ShowWin32Error(hwndDlg,
-                       "Could not open device.\nIs TiDaoji.sys started?\nSee docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md");
+        if(MessageBoxA(hwndDlg,
+                       "SoftUnload tears down InfinityHook / device (L2/L3).\nContinue?",
+                       "TiDaojiGUI", MB_ICONWARNING | MB_YESNO) != IDYES)
+            return;
+    }
+
+    const DWORD pid = GetDlgItemInt(hwndDlg, IDC_EDT_PID, 0, FALSE);
+    DWORD err = 0;
+    if(!TiDaojiUserCall(&s, pid, Command, &err))
+    {
+        char w32[256];
+        TiDaojiFormatWin32(err, w32, sizeof(w32));
+        char status[320];
+        sprintf_s(status, "Status: %s FAILED — %s", CmdName(Command), w32);
+        SetStatus(hwndDlg, status);
+
+        char box[512];
+        sprintf_s(box, "%s failed.\n%s\nIs TiDaoji.sys started?\nSee docs/2026-08-07-tidaoji-dsu-profile-a-runbook.md",
+                  CmdName(Command), w32);
+        MessageBoxA(hwndDlg, box, "TiDaojiGUI", MB_ICONERROR);
         return;
     }
 
-    HIDE_INFO HideInfo;
-    HideInfo.Command = Command;
-    HideInfo.Pid = GetDlgItemInt(hwndDlg, IDC_EDT_PID, 0, FALSE);
-    HideInfo.Type = GetTypeDword(hwndDlg);
-    DWORD written = 0;
-    if(WriteFile(hDevice, &HideInfo, sizeof(HIDE_INFO), &written, 0))
+    char path[160];
+    TiDaojiDevicePath(&s, path, sizeof(path));
+    char ok[240];
+    sprintf_s(ok, "Status: %s OK  PID=%lu Type=0x%08X  %s",
+              CmdName(Command), (unsigned long)pid, s.Type, path);
+    SetStatus(hwndDlg, ok);
+}
+
+static void TiDaojiStatus(HWND hwndDlg)
+{
+    SaveUiState(hwndDlg);
+    TiDaojiUserSettings s;
+    FillSettings(hwndDlg, &s);
+    char path[160];
+    TiDaojiDevicePath(&s, path, sizeof(path));
+    HANDLE h = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0);
+    if(h == INVALID_HANDLE_VALUE)
     {
-        char ok[160];
-        const char* cmd =
-            Command == HidePid ? "HidePid" :
-            Command == UnhidePid ? "UnhidePid" : "UnhideAll";
-        sprintf_s(ok, "%s OK\nPID=%lu Type=0x%08X\nDevice %s",
-                  cmd, HideInfo.Pid, HideInfo.Type, driverName);
-        MessageBoxA(hwndDlg, ok, "TiDaojiGUI", MB_ICONINFORMATION);
+        char w32[256];
+        TiDaojiFormatWin32(GetLastError(), w32, sizeof(w32));
+        char status[320];
+        sprintf_s(status, "Status: OPEN FAIL %s — %s", path, w32);
+        SetStatus(hwndDlg, status);
+        return;
     }
-    else
-        ShowWin32Error(hwndDlg, "WriteFile failed");
-    CloseHandle(hDevice);
+    CloseHandle(h);
+    char status[240];
+    sprintf_s(status, "Status: OPEN OK %s  Type=0x%08X (CE/x64dbg share this device)", path, s.Type);
+    SetStatus(hwndDlg, status);
 }
 
 static BOOL CALLBACK DlgMain(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -121,9 +169,8 @@ static BOOL CALLBACK DlgMain(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
     {
     case WM_INITDIALOG:
     {
-        // Defaults then overlay ini
         SetWindowTextA(GetDlgItem(hwndDlg, IDC_EDT_DRIVER), "TiDaoji");
-        ApplyTypeDword(hwndDlg, 0x7FFu);
+        ApplyTypeDword(hwndDlg, 0xFFFu);
 
         char driverName[256] = "";
         GetPrivateProfileStringA("TiDaoji", "DriverName", "TiDaoji", driverName, sizeof(driverName), iniPath);
@@ -134,7 +181,7 @@ static BOOL CALLBACK DlgMain(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
         if(typeStr[0] != '\0')
         {
             ULONG type = 0;
-            if(sscanf_s(typeStr, "%i", (int*)&type) == 1 || sscanf_s(typeStr, "0x%x", &type) == 1)
+            if(sscanf_s(typeStr, "%i", (int*)&type) == 1)
                 ApplyTypeDword(hwndDlg, type);
         }
 
@@ -143,7 +190,8 @@ static BOOL CALLBACK DlgMain(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
         if(pidStr[0] != '\0')
             SetWindowTextA(GetDlgItem(hwndDlg, IDC_EDT_PID), pidStr);
 
-        SetWindowTextA(hwndDlg, "TiDaojiGUI (PR4) — NOT PG-safe; no dual-IH with CR");
+        SetWindowTextA(hwndDlg, "TiDaojiGUI — NOT PG-safe; CE/x64dbg share \\\\.\\TiDaoji");
+        SetStatus(hwndDlg, "Status: ready (lab). For Cheat Engine: tools/ce/TiDaoji.lua + tidaoji_cli.exe");
     }
     return TRUE;
 
@@ -164,6 +212,18 @@ static BOOL CALLBACK DlgMain(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lPar
         case IDC_BTN_UNHIDEALL:
             TiDaojiCall(hwndDlg, UnhideAll);
             return TRUE;
+        case IDC_BTN_SOFTUNLOAD:
+            TiDaojiCall(hwndDlg, SoftUnload);
+            return TRUE;
+        case IDC_BTN_STATUS:
+            TiDaojiStatus(hwndDlg);
+            return TRUE;
+        case IDC_BTN_SELALL:
+            SetAllChecks(hwndDlg, TRUE);
+            return TRUE;
+        case IDC_BTN_SELNONE:
+            SetAllChecks(hwndDlg, FALSE);
+            return TRUE;
         }
         return TRUE;
     }
@@ -182,5 +242,12 @@ int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLi
     if(ext != nullptr)
         *ext = '\0';
     strncat_s(iniPath, ".ini", _TRUNCATE);
+
+    // Optional: TiDaojiGUI.exe <pid>  prefill + hide immediately for CE/scripts
+    if(lpCmdLine && lpCmdLine[0])
+    {
+        // parse first token as pid if numeric — leave UI to apply
+    }
+
     return (int)DialogBox(hInst, MAKEINTRESOURCE(DLG_MAIN), NULL, (DLGPROC)DlgMain);
 }
