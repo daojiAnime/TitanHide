@@ -49,6 +49,15 @@ dse_on.bat
 - KDU: https://github.com/hfiref0x/KDU (MIT-style third-party; see their license)  
 - Binaries vendored for **reproducible lab** — update with care; re-hash after replace.
 
+## Relation to L2/L3
+
+| Profile | This folder |
+|---------|-------------|
+| **L1** (default lab) | **Yes** — DSE window + `sc` |
+| L2/L3 manual map | **No** — use `tools/loader/` + external mapper |
+
+See `docs/2026-08-07-tidaoji-loader-profiles-L1-L3.md`.
+
 ## Legal / safety
 
 - Uses vulnerable-driver / CI flag write techniques. **Never** on production or internet-facing hosts.  

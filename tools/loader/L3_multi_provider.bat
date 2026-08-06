@@ -34,17 +34,21 @@ echo MAPPER=%TIDAOJI_MAPPER%
 echo ARGS=%TIDAOJI_MAPPER_ARGS%
 echo PROVIDER=%TIDAOJI_PROVIDER%
 echo SYS=%SYS%
+echo [*] Same driver contract as L2 ^(NULL DriverObject / SoftUnload^)
+echo [*] Use when iqvw/blocklist fails; swap BYOVD inside YOUR mapper, not this repo
+echo [*] Docs: docs\2026-08-07-tidaoji-loader-profiles-L1-L3.md
+echo [*] Template: providers.example.ini
 
-REM Generic invocation patterns — adjust to your tool CLI.
+REM Generic CLI — adjust to your tool. Common: -prv id  ^(kdmapper-style^)
 if not "%TIDAOJI_PROVIDER%"=="" (
-  REM Common kdmapper-style: -prv id
   "%TIDAOJI_MAPPER%" -prv %TIDAOJI_PROVIDER% %TIDAOJI_MAPPER_ARGS% "%SYS%"
 ) else (
   "%TIDAOJI_MAPPER%" %TIDAOJI_MAPPER_ARGS% "%SYS%"
 )
 set RC=!ERRORLEVEL!
 echo [*] mapper exit=!RC!
+if not "!RC!"=="0" echo [!] see L1-L3 doc section 2.4 failure table
 
 if exist "%ROOT%tools\tidaoji_smoke.exe" "%ROOT%tools\tidaoji_smoke.exe"
-echo [+] Teardown: soft_unload.bat  ^(or reboot if map left no device^)
+echo [+] Teardown: soft_unload.bat  ^(reboot for full page cleanup^)
 endlocal & exit /b %RC%

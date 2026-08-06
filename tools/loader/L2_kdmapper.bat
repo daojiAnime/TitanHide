@@ -31,11 +31,18 @@ if not exist "%SYS%" (
 echo === L2 kdmapper-class map ===
 echo MAPPER=%KDMAPPER%
 echo SYS=%SYS%
-echo [*] Mapping... ^(Entry must return quickly; SoftUnload later^)
+echo [*] Preflight ^(manual^): HVCI off; blocklist if 0xC0000603; no \\Device\\Nal leftover
+echo [*] Do NOT use mapper --free for long-lived TiDaoji
+echo [*] Mapping... ^(DriverEntry must return; SoftUnload later; reboot to fully clean pages^)
+echo [*] Docs: docs\2026-08-07-tidaoji-loader-profiles-L1-L3.md
 "%KDMAPPER%" "%SYS%"
 set RC=%ERRORLEVEL%
 echo [*] mapper exit=%RC%
+if "%RC%"=="0" goto probe
+echo [!] non-zero exit — common: 0xC0000603 blocklist, 0xC0000022 AV/AC, Nal in use, pattern/offset
+goto end
 
+:probe
 echo [*] Probe device \\.\TiDaoji
 if exist "%ROOT%tools\tidaoji_smoke.exe" (
   "%ROOT%tools\tidaoji_smoke.exe"
@@ -45,5 +52,7 @@ if exist "%ROOT%tools\tidaoji_smoke.exe" (
 
 echo [+] If device open works, use soft_unload.bat when done.
 echo [+] sc stop will NOT work for pure manual-map ^(no SCM service^).
+
+:end
 endlocal
 exit /b %RC%
