@@ -82,8 +82,8 @@ static void LogOpenFail(const char* path, DWORD err)
         hint = "access denied: run x64dbg as Administrator";
     else if(err == ERROR_TOO_MANY_POSTS) // 298 — often seen when service stopped / bad link
         hint = "Win32=298: driver STOPPED or stale; sc query TiDaoji, then L1 restart";
-    _plugin_logprintf("[" PLUGIN_NAME "] open %s FAILED Win32=%lu — %s\n", path, err, hint);
-    _plugin_logputs("[" PLUGIN_NAME "] Menu: Plugins -> TiDaoji -> Control Panel (status UI)");
+    _plugin_logprintf("[" PLUGIN_NAME "] open %s FAILED Win32=%lu - %s\n", path, err, hint);
+    _plugin_logputs("[" PLUGIN_NAME "] Menu: Plugins -> TiDaoji -> Control Panel");
 }
 
 static bool OpenDevice(HANDLE* out)
@@ -198,6 +198,7 @@ static bool cbTiDaoji(int argc, char* argv[])
     _plugin_logprintf("[" PLUGIN_NAME "] HidePid PID %u (0x%X)\n", pid, pid);
     if(TiDaojiCall(HidePid))
     {
+        // Safe PEB hide from command path (user typed TiDaoji / menu) — not from SYSTEMBP
         DbgCmdExecDirect("hide");
         hidden = true;
         return true;
@@ -282,32 +283,81 @@ static bool cbTiDaojiName(int argc, char* argv[])
     return true;
 }
 
+// Kernel hide without DbgCmdExecDirect("hide") — re-entrancy from SYSTEMBP
+// callbacks has historically crashed x64dbg (command queue re-enter).
+void TiDaojiHideKernelOnly()
+{
+    if(pid == 0)
+        return;
+    if(TiDaojiCall(HidePid))
+        hidden = true;
+}
+
+void TiDaojiUnhideKernelOnly()
+{
+    if(pid == 0)
+        return;
+    if(TiDaojiCall(UnhidePid))
+        hidden = false;
+}
+
 PLUG_EXPORT void CBCREATEPROCESS(CBTYPE cbType, PLUG_CB_CREATEPROCESS* info)
 {
     UNREFERENCED_PARAMETER(cbType);
-    NotePid(info->fdProcessInfo->dwProcessId);
+    __try
+    {
+        if(info && info->fdProcessInfo)
+            NotePid(info->fdProcessInfo->dwProcessId);
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER)
+    {
+        _plugin_logputs("[" PLUGIN_NAME "] CBCREATEPROCESS exception");
+    }
 }
 
 PLUG_EXPORT void CBATTACH(CBTYPE cbType, PLUG_CB_ATTACH* info)
 {
     UNREFERENCED_PARAMETER(cbType);
-    NotePid(info->dwProcessId);
+    __try
+    {
+        if(info)
+            NotePid(info->dwProcessId);
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER)
+    {
+        _plugin_logputs("[" PLUGIN_NAME "] CBATTACH exception");
+    }
 }
 
 PLUG_EXPORT void CBSYSTEMBREAKPOINT(CBTYPE cbType, PLUG_CB_SYSTEMBREAKPOINT* info)
 {
     UNREFERENCED_PARAMETER(cbType);
     UNREFERENCED_PARAMETER(info);
-    char* argv = "TiDaoji";
-    cbTiDaoji(1, &argv);
+    // Do NOT call DbgCmdExec here — only kernel WriteFile path.
+    __try
+    {
+        TiDaojiHideKernelOnly();
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER)
+    {
+        _plugin_logputs("[" PLUGIN_NAME "] CBSYSTEMBREAKPOINT exception");
+    }
 }
 
 PLUG_EXPORT void CBSTOPDEBUG(CBTYPE cbType, PLUG_CB_STOPDEBUG* info)
 {
     UNREFERENCED_PARAMETER(cbType);
     UNREFERENCED_PARAMETER(info);
-    char* argv = "TiDaojiUnhide";
-    cbTiDaojiUnhide(1, &argv);
+    __try
+    {
+        TiDaojiUnhideKernelOnly();
+        pid = 0;
+        hidden = false;
+    }
+    __except(EXCEPTION_EXECUTE_HANDLER)
+    {
+        _plugin_logputs("[" PLUGIN_NAME "] CBSTOPDEBUG exception");
+    }
 }
 
 // --- Control Panel (Win32 dialog; x64dbg pattern: DialogBox + GuiGetWindowHandle) ---
@@ -437,7 +487,8 @@ static INT_PTR CALLBACK PanelDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM)
                 MessageBoxA(hDlg, "No debuggee PID. Open/attach a process first.", PLUGIN_NAME, MB_ICONWARNING);
             else if(TiDaojiCall(HidePid))
             {
-                DbgCmdExecDirect("hide");
+                // PEB hide via GUI thread (avoid nested cmd during modal dialog)
+                GuiExecuteOnGuiThread(+[]() { DbgCmdExecDirect("hide"); });
                 hidden = true;
             }
             RefreshPanel(hDlg);
@@ -478,19 +529,38 @@ static INT_PTR CALLBACK PanelDlgProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM)
     return FALSE;
 }
 
-void TiDaojiShowPanel()
+static void ShowPanelOnGui()
 {
     if(!g_hInst)
-        g_hInst = GetModuleHandleA("TiDaoji.dp64");
-    if(!g_hInst)
-        g_hInst = GetModuleHandleA("TiDaoji.dp32");
+    {
+        GetModuleHandleExA(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            reinterpret_cast<LPCSTR>(&ShowPanelOnGui),
+            &g_hInst);
+    }
     if(!g_hInst)
     {
-        _plugin_logputs("[" PLUGIN_NAME "] UI: module handle null (dp64/dp32 not found)");
+        _plugin_logputs("[" PLUGIN_NAME "] UI: HINSTANCE null — rebuild plugin with DllMain");
         return;
     }
-    DialogBoxParamA(g_hInst, MAKEINTRESOURCEA(IDD_PANEL),
-                    GuiGetWindowHandle(), PanelDlgProc, 0);
+    HWND parent = hwndDlg ? hwndDlg : GuiGetWindowHandle();
+    INT_PTR r = DialogBoxParamA(g_hInst, MAKEINTRESOURCEA(IDD_PANEL), parent, PanelDlgProc, 0);
+    if(r == -1)
+    {
+        _plugin_logprintf("[" PLUGIN_NAME "] DialogBox failed Win32=%lu (resource missing?)\n",
+                          GetLastError());
+    }
+}
+
+void TiDaojiShowPanel()
+{
+    // Ensure dialog runs on GUI thread (x64dbg GuiExecuteOnGuiThread)
+    // Menu already on GUI thread usually; GuiExecute is still safe.
+    HWND main = GuiGetWindowHandle();
+    if(main && GetCurrentThreadId() != GetWindowThreadProcessId(main, nullptr))
+        GuiExecuteOnGuiThread(+[]() { ShowPanelOnGui(); });
+    else
+        ShowPanelOnGui();
 }
 
 void TiDaojiInit(PLUG_INITSTRUCT* initStruct)
