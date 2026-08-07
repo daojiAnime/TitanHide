@@ -5,7 +5,7 @@
 
 #define PLUGIN_NAME "TiDaoji"
 // v4: control panel UI + deployable error hints
-#define PLUGIN_VERSION 5
+#define PLUGIN_VERSION 6
 
 void TiDaojiInit(PLUG_INITSTRUCT* initStruct);
 void TiDaojiStop();
