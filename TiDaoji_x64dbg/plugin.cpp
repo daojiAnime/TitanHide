@@ -1,418 +1,192 @@
-// TiDaoji x64dbg plugin v7
-// Critical: do NOT export CBCREATEPROCESS/CBSYSTEMBREAKPOINT/etc.
-// Register callbacks via _plugin_registercallback in plugsetup only.
-// pluginit: no Bridge API. /MD CRT. No std::string.
 #include "plugin.h"
 #include <windows.h>
 #include <stdio.h>
-#include <string.h>
+#include <string>
 #include "../TiDaoji/TiDaoji.h"
-#include "resource.h"
 
-static DWORD g_pid = 0;
-static int g_hidden = 0;
-static char g_driverName[64] = "TiDaoji";
-static const ULONG kDefaultType = 0xFFFu;
+// Port of mrexodia/TitanHide TitanHide_x64dbg/plugin.cpp
+// Delta vs upstream: TiDaoji naming, SoftUnload command, default Type 0xFFF (known bits).
 
-static ULONG GetTypeMask()
+static DWORD pid = 0;
+static bool hidden = false;
+static std::string driverName = "TiDaoji";
+
+static ULONG GetTiDaojiOptions()
 {
     duint options = 0;
     if(!BridgeSettingGetUint("TiDaoji", "Options", &options))
-        options = kDefaultType;
+        options = 0xFFFu; // BIT1..BIT12; upstream default is 0xffffffff
     return (ULONG)options;
 }
 
-static int AutoHideOn()
+static bool TiDaojiCall(HIDE_COMMAND Command)
 {
-    duint v = 0;
-    if(!BridgeSettingGetUint("TiDaoji", "AutoHide", &v))
-        return 0;
-    return v ? 1 : 0;
-}
-
-static bool OpenDev(HANDLE* out)
-{
-    char path[96];
-    _snprintf_s(path, _TRUNCATE, "\\\\.\\%s", g_driverName);
-    HANDLE h = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
-    if(h == INVALID_HANDLE_VALUE)
+    auto path = "\\\\.\\" + driverName;
+    HANDLE hDevice = CreateFileA(path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, 0, OPEN_EXISTING, 0, 0);
+    if(hDevice == INVALID_HANDLE_VALUE)
     {
-        _plugin_logprintf("[TiDaoji] open %s fail Win32=%lu\n", path, GetLastError());
-        *out = INVALID_HANDLE_VALUE;
+        _plugin_logputs("[" PLUGIN_NAME "] Could not open TiDaoji handle (service started? name via TiDaojiName)");
         return false;
     }
-    *out = h;
-    return true;
-}
-
-static bool DevWrite(HIDE_COMMAND cmd, DWORD pid, ULONG type)
-{
-    HANDLE h = INVALID_HANDLE_VALUE;
-    if(!OpenDev(&h))
-        return false;
-    HIDE_INFO hi = {};
-    hi.Command = cmd;
-    hi.Pid = pid;
-    hi.Type = type;
-    DWORD n = 0;
-    BOOL ok = WriteFile(h, &hi, sizeof(hi), &n, nullptr);
-    if(!ok)
-        _plugin_logprintf("[TiDaoji] WriteFile fail Win32=%lu\n", GetLastError());
-    else
-        _plugin_logprintf("[TiDaoji] ok cmd=%d pid=%lu type=0x%X\n", (int)cmd, (unsigned long)pid, type);
-    CloseHandle(h);
-    return ok == TRUE;
-}
-
-static void NotePid(DWORD p)
-{
-    if(p != g_pid)
+    HIDE_INFO HideInfo;
+    HideInfo.Command = Command;
+    HideInfo.Pid = pid;
+    HideInfo.Type = GetTiDaojiOptions();
+    DWORD written = 0;
+    auto result = false;
+    if(WriteFile(hDevice, &HideInfo, sizeof(HIDE_INFO), &written, 0))
     {
-        g_hidden = 0;
-        g_pid = p;
+        if(Command == SoftUnload)
+            _plugin_logputs("[" PLUGIN_NAME "] SoftUnload written");
+        else if(Command == UnhideAll)
+            _plugin_logputs("[" PLUGIN_NAME "] UnhideAll written");
+        else
+            _plugin_logprintf("[" PLUGIN_NAME "] Process %shidden!\n", Command == UnhidePid ? "un" : "");
+        result = true;
     }
-}
-
-// --- commands ---
-static bool cbHide(int, char**)
-{
-    if(!g_pid)
-    {
-        _plugin_logputs("[TiDaoji] no PID");
-        return false;
-    }
-    if(DevWrite(HidePid, g_pid, GetTypeMask()))
-    {
-        g_hidden = 1;
-        DbgCmdExecDirect("hide");
-        return true;
-    }
-    return false;
-}
-
-static bool cbUnhide(int, char**)
-{
-    if(!g_pid)
-        return false;
-    if(DevWrite(UnhidePid, g_pid, GetTypeMask()))
-    {
-        g_hidden = 0;
-        return true;
-    }
-    return false;
-}
-
-static bool cbUnhideAll(int, char**)
-{
-    if(DevWrite(UnhideAll, 0, 0))
-    {
-        g_hidden = 0;
-        return true;
-    }
-    return false;
-}
-
-static bool cbSoft(int, char**)
-{
-    return DevWrite(SoftUnload, 0, 0);
-}
-
-static bool cbStatus(int, char**)
-{
-    HANDLE h = INVALID_HANDLE_VALUE;
-    _plugin_logprintf("[TiDaoji] driver=%s pid=%lu hidden=%d type=0x%X auto=%d\n",
-                      g_driverName, (unsigned long)g_pid, g_hidden, GetTypeMask(), AutoHideOn());
-    if(OpenDev(&h))
-    {
-        _plugin_logputs("[TiDaoji] device OPEN ok");
-        CloseHandle(h);
-    }
-    return true;
-}
-
-static bool cbOptions(int argc, char** argv)
-{
-    if(argc < 2)
-    {
-        _plugin_logprintf("[TiDaoji] Type=0x%08X\n", GetTypeMask());
-        return true;
-    }
-    BridgeSettingSetUint("TiDaoji", "Options", DbgValFromString(argv[1]) & 0xffffffff);
-    return true;
-}
-
-static bool cbName(int argc, char** argv)
-{
-    if(argc < 2)
-    {
-        _plugin_logprintf("[TiDaoji] name=%s\n", g_driverName);
-        return true;
-    }
-    strncpy_s(g_driverName, argv[1], _TRUNCATE);
-    BridgeSettingSet("TiDaoji", "DriverName", g_driverName);
-    return true;
-}
-
-static bool cbAuto(int argc, char** argv)
-{
-    if(argc < 2)
-    {
-        _plugin_logprintf("[TiDaoji] AutoHide=%d\n", AutoHideOn());
-        return true;
-    }
-    BridgeSettingSetUint("TiDaoji", "AutoHide", DbgValFromString(argv[1]) ? 1 : 0);
-    return true;
-}
-
-static bool cbHelp(int, char**)
-{
-    _plugin_logputs("[TiDaoji] Panel|Hide|Unhide|Status|AutoHide 0|1|SoftUnload");
-    _plugin_logputs("[TiDaoji] AutoHide default 0. Need TiDaoji.sys running.");
-    return true;
-}
-
-// --- panel ---
-struct Chk { int id; ULONG bit; };
-static const Chk kChk[] = {
-    { IDC_CHK_PROCESSDEBUGFLAGS, HideProcessDebugFlags },
-    { IDC_CHK_PROCESSDEBUGPORT, HideProcessDebugPort },
-    { IDC_CHK_PROCESSDEBUGOBJECTHANDLE, HideProcessDebugObjectHandle },
-    { IDC_CHK_DEBUGOBJECT, HideDebugObject },
-    { IDC_CHK_SYSTEMDEBUGGERINFO, HideSystemDebuggerInformation },
-    { IDC_CHK_NTCLOSE, HideNtClose },
-    { IDC_CHK_THREADHIDEFROMDBG, HideThreadHideFromDebugger },
-    { IDC_CHK_NTGETCONTEXTTHREAD, HideNtGetContextThread },
-    { IDC_CHK_NTSETCONTEXTTHREAD, HideNtSetContextThread },
-    { IDC_CHK_NTSYSTEMDEBUGCONTROL, HideNtSystemDebugControl },
-    { IDC_CHK_NTSYSTEMVMINFO, HideNtSystemVMInformation },
-    { IDC_CHK_NTTERMINATEPROCESS, HideNtTerminateProcess },
-};
-
-static void Refresh(HWND d)
-{
-    char name[64] = {};
-    GetDlgItemTextA(d, IDC_EDT_DRIVER, name, 64);
-    if(!name[0])
-        strcpy_s(name, "TiDaoji");
-    char path[96];
-    _snprintf_s(path, _TRUNCATE, "\\\\.\\%s", name);
-    HANDLE h = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, nullptr, OPEN_EXISTING, 0, nullptr);
-    char st[200];
-    if(h == INVALID_HANDLE_VALUE)
-        _snprintf_s(st, _TRUNCATE, "Status: OPEN FAIL %s err=%lu", path, GetLastError());
     else
     {
-        CloseHandle(h);
-        _snprintf_s(st, _TRUNCATE, "Status: OPEN OK %s", path);
+        _plugin_logputs("[" PLUGIN_NAME "] WriteFile error...");
     }
-    SetDlgItemTextA(d, IDC_LBL_STATUS, st);
-    char pb[100];
-    if(g_pid)
-        _snprintf_s(pb, _TRUNCATE, "PID %lu hidden=%d", (unsigned long)g_pid, g_hidden);
-    else
-        strcpy_s(pb, "PID (none)");
-    SetDlgItemTextA(d, IDC_LBL_PID, pb);
+    CloseHandle(hDevice);
+    return result;
 }
 
-static INT_PTR CALLBACK PanelProc(HWND d, UINT m, WPARAM w, LPARAM)
+static bool cbTiDaoji(int argc, char* argv[])
 {
-    if(m == WM_INITDIALOG)
+    UNREFERENCED_PARAMETER(argc);
+    UNREFERENCED_PARAMETER(argv);
+    // Upstream only hides when !hidden; keep same semantics
+    if(!hidden)
     {
-        ULONG t = GetTypeMask();
-        for(size_t i = 0; i < sizeof(kChk) / sizeof(kChk[0]); i++)
-            if(t & kChk[i].bit)
-                CheckDlgButton(d, kChk[i].id, BST_CHECKED);
-        SetDlgItemTextA(d, IDC_EDT_DRIVER, g_driverName);
-        Refresh(d);
-        return TRUE;
-    }
-    if(m == WM_COMMAND)
-    {
-        switch(LOWORD(w))
+        _plugin_logprintf("[" PLUGIN_NAME "] Hiding PID %X (%u)\n", pid, pid);
+        if(TiDaojiCall(HidePid))
         {
-        case IDC_BTN_SELALL:
-            for(size_t i = 0; i < sizeof(kChk) / sizeof(kChk[0]); i++)
-                CheckDlgButton(d, kChk[i].id, BST_CHECKED);
-            return TRUE;
-        case IDC_BTN_SELNONE:
-            for(size_t i = 0; i < sizeof(kChk) / sizeof(kChk[0]); i++)
-                CheckDlgButton(d, kChk[i].id, BST_UNCHECKED);
-            return TRUE;
-        case IDC_BTN_REFRESH:
-            Refresh(d);
-            return TRUE;
-        case IDC_BTN_APPLY:
-        {
-            char name[64] = {};
-            GetDlgItemTextA(d, IDC_EDT_DRIVER, name, 64);
-            if(name[0])
-            {
-                strcpy_s(g_driverName, name);
-                BridgeSettingSet("TiDaoji", "DriverName", g_driverName);
-            }
-            ULONG t = 0;
-            for(size_t i = 0; i < sizeof(kChk) / sizeof(kChk[0]); i++)
-                if(IsDlgButtonChecked(d, kChk[i].id) == BST_CHECKED)
-                    t |= kChk[i].bit;
-            BridgeSettingSetUint("TiDaoji", "Options", t);
-            Refresh(d);
-            return TRUE;
-        }
-        case IDC_BTN_HIDE:
-            if(!g_pid)
-                MessageBoxA(d, "No debuggee", "TiDaoji", MB_OK);
-            else
-            {
-                char name[64] = {};
-                GetDlgItemTextA(d, IDC_EDT_DRIVER, name, 64);
-                if(name[0])
-                    strcpy_s(g_driverName, name);
-                ULONG t = 0;
-                for(size_t i = 0; i < sizeof(kChk) / sizeof(kChk[0]); i++)
-                    if(IsDlgButtonChecked(d, kChk[i].id) == BST_CHECKED)
-                        t |= kChk[i].bit;
-                BridgeSettingSetUint("TiDaoji", "Options", t);
-                if(DevWrite(HidePid, g_pid, t))
-                {
-                    g_hidden = 1;
-                    DbgCmdExecDirect("hide");
-                }
-            }
-            Refresh(d);
-            return TRUE;
-        case IDC_BTN_UNHIDE:
-            if(g_pid && DevWrite(UnhidePid, g_pid, GetTypeMask()))
-                g_hidden = 0;
-            Refresh(d);
-            return TRUE;
-        case IDC_BTN_UNHIDEALL:
-            if(DevWrite(UnhideAll, 0, 0))
-                g_hidden = 0;
-            Refresh(d);
-            return TRUE;
-        case IDC_BTN_SOFTUNLOAD:
-            if(MessageBoxA(d, "SoftUnload?", "TiDaoji", MB_YESNO | MB_ICONWARNING) == IDYES)
-                DevWrite(SoftUnload, 0, 0);
-            Refresh(d);
-            return TRUE;
-        case IDC_BTN_CLOSE:
-        case IDCANCEL:
-            EndDialog(d, 0);
-            return TRUE;
+            DbgCmdExecDirect("hide");
+            hidden = true;
         }
     }
-    return FALSE;
+    return hidden;
 }
 
-void TiDaojiShowPanel()
+static bool cbTiDaojiUnhide(int argc, char* argv[])
 {
-    if(!g_hInst)
-        return;
-    HWND p = hwndDlg ? hwndDlg : GuiGetWindowHandle();
-    DialogBoxParamA(g_hInst, MAKEINTRESOURCEA(IDD_PANEL), p, PanelProc, 0);
+    UNREFERENCED_PARAMETER(argc);
+    UNREFERENCED_PARAMETER(argv);
+    if(hidden)
+    {
+        _plugin_logprintf("[" PLUGIN_NAME "] Unhiding PID %X (%u)\n", pid, pid);
+        if(TiDaojiCall(UnhidePid))
+            hidden = false;
+    }
+    return !hidden;
 }
 
-void TiDaojiHideKernelOnly()
+static bool cbTiDaojiOptions(int argc, char* argv[])
 {
-    if(g_pid && DevWrite(HidePid, g_pid, GetTypeMask()))
-        g_hidden = 1;
-}
-
-void TiDaojiUnhideKernelOnly()
-{
-    if(g_pid && DevWrite(UnhidePid, g_pid, GetTypeMask()))
-        g_hidden = 0;
-}
-
-static bool cbPanel(int, char**)
-{
-    TiDaojiShowPanel();
+    if(argc < 2)
+    {
+        _plugin_logprintf("[" PLUGIN_NAME "] Options: 0x%08X\n", GetTiDaojiOptions());
+    }
+    else
+    {
+        duint options = DbgValFromString(argv[1]);
+        BridgeSettingSetUint("TiDaoji", "Options", options & 0xffffffff);
+        if(hidden)
+            TiDaojiCall(HidePid);
+        _plugin_logprintf("[" PLUGIN_NAME "] New options: 0x%08X\n", GetTiDaojiOptions());
+    }
     return true;
 }
 
-// Registered via _plugin_registercallback — NOT as PE exports
-static void cbCreateProcess(CBTYPE, void* callbackInfo)
+static bool cbTiDaojiName(int argc, char* argv[])
 {
-    auto* info = (PLUG_CB_CREATEPROCESS*)callbackInfo;
-    if(info && info->fdProcessInfo)
-        NotePid(info->fdProcessInfo->dwProcessId);
+    if(argc < 2)
+    {
+        _plugin_logprintf("[" PLUGIN_NAME "] Current driver name: '%s'\n", driverName.c_str());
+    }
+    else
+    {
+        driverName = argv[1];
+        BridgeSettingSet("TiDaoji", "DriverName", driverName.c_str());
+        _plugin_logprintf("[" PLUGIN_NAME "] New driver name: '%s'\n", driverName.c_str());
+    }
+    return true;
 }
 
-static void cbAttach(CBTYPE, void* callbackInfo)
+// Minimal official-compatible extension: SoftUnload for L2/L3
+static bool cbTiDaojiSoftUnload(int argc, char* argv[])
 {
-    auto* info = (PLUG_CB_ATTACH*)callbackInfo;
-    if(info)
-        NotePid(info->dwProcessId);
+    UNREFERENCED_PARAMETER(argc);
+    UNREFERENCED_PARAMETER(argv);
+    _plugin_logputs("[" PLUGIN_NAME "] SoftUnload");
+    if(TiDaojiCall(SoftUnload))
+        hidden = false;
+    return true;
 }
 
-static void cbSystemBp(CBTYPE, void*)
+static bool cbTiDaojiUnhideAll(int argc, char* argv[])
 {
-    if(AutoHideOn())
-        TiDaojiHideKernelOnly();
+    UNREFERENCED_PARAMETER(argc);
+    UNREFERENCED_PARAMETER(argv);
+    if(TiDaojiCall(UnhideAll))
+        hidden = false;
+    return true;
 }
 
-static void cbStopDebug(CBTYPE, void*)
+PLUG_EXPORT void CBCREATEPROCESS(CBTYPE cbType, PLUG_CB_CREATEPROCESS* info)
 {
-    if(AutoHideOn() && g_pid)
-        TiDaojiUnhideKernelOnly();
-    g_pid = 0;
-    g_hidden = 0;
+    UNREFERENCED_PARAMETER(cbType);
+    pid = info->fdProcessInfo->dwProcessId;
 }
 
-void TiDaojiInit(PLUG_INITSTRUCT*)
+PLUG_EXPORT void CBATTACH(CBTYPE cbType, PLUG_CB_ATTACH* info)
 {
-    // Intentionally empty of Bridge calls — plugsetup does real init.
+    UNREFERENCED_PARAMETER(cbType);
+    pid = info->dwProcessId;
 }
 
-void TiDaojiSetup()
+PLUG_EXPORT void CBSYSTEMBREAKPOINT(CBTYPE cbType, PLUG_CB_SYSTEMBREAKPOINT* info)
 {
+    UNREFERENCED_PARAMETER(cbType);
+    UNREFERENCED_PARAMETER(info);
+    char* argv = "TiDaoji";
+    cbTiDaoji(1, &argv);
+}
+
+PLUG_EXPORT void CBSTOPDEBUG(CBTYPE cbType, PLUG_CB_STOPDEBUG* info)
+{
+    UNREFERENCED_PARAMETER(cbType);
+    UNREFERENCED_PARAMETER(info);
+    char* argv = "TiDaojiUnhide";
+    cbTiDaojiUnhide(1, &argv);
+}
+
+void TiDaojiInit(PLUG_INITSTRUCT* initStruct)
+{
+    UNREFERENCED_PARAMETER(initStruct);
     char setting[MAX_SETTING_SIZE] = "";
-    if(BridgeSettingGet("TiDaoji", "DriverName", setting) && setting[0])
-        strncpy_s(g_driverName, setting, _TRUNCATE);
+    BridgeSettingGet("TiDaoji", "DriverName", setting);
+    if(setting[0] != '\0')
+    {
+        driverName = setting;
+    }
 
-    duint options = 0;
-    if(!BridgeSettingGetUint("TiDaoji", "Options", &options))
-        BridgeSettingSetUint("TiDaoji", "Options", kDefaultType);
-
-    duint ah = 0;
-    if(!BridgeSettingGetUint("TiDaoji", "AutoHide", &ah))
-        BridgeSettingSetUint("TiDaoji", "AutoHide", 0);
-
-    _plugin_registercommand(pluginHandle, "TiDaoji", cbHide, true);
-    _plugin_registercommand(pluginHandle, "TiDaojiUnhide", cbUnhide, true);
-    _plugin_registercommand(pluginHandle, "TiDaojiUnhideAll", cbUnhideAll, false);
-    _plugin_registercommand(pluginHandle, "TiDaojiSoftUnload", cbSoft, false);
-    _plugin_registercommand(pluginHandle, "TiDaojiOptions", cbOptions, false);
-    _plugin_registercommand(pluginHandle, "TiDaojiName", cbName, false);
-    _plugin_registercommand(pluginHandle, "TiDaojiStatus", cbStatus, false);
-    _plugin_registercommand(pluginHandle, "TiDaojiAutoHide", cbAuto, false);
-    _plugin_registercommand(pluginHandle, "TiDaojiHelp", cbHelp, false);
-    _plugin_registercommand(pluginHandle, "TiDaojiPanel", cbPanel, false);
-
-    _plugin_registercallback(pluginHandle, CB_CREATEPROCESS, cbCreateProcess);
-    _plugin_registercallback(pluginHandle, CB_ATTACH, cbAttach);
-    _plugin_registercallback(pluginHandle, CB_SYSTEMBREAKPOINT, cbSystemBp);
-    _plugin_registercallback(pluginHandle, CB_STOPDEBUG, cbStopDebug);
-
-    _plugin_logprintf("[TiDaoji] v%d ready. AutoHide=%d \\\\.\\%s\n",
-                      PLUGIN_VERSION, AutoHideOn(), g_driverName);
+    _plugin_registercommand(pluginHandle, "TiDaoji", cbTiDaoji, true);
+    _plugin_registercommand(pluginHandle, "TiDaojiUnhide", cbTiDaojiUnhide, true);
+    _plugin_registercommand(pluginHandle, "TiDaojiOptions", cbTiDaojiOptions, false);
+    _plugin_registercommand(pluginHandle, "TiDaojiName", cbTiDaojiName, false);
+    // TiDaoji-only (kernel SoftUnload / clear table)
+    _plugin_registercommand(pluginHandle, "TiDaojiSoftUnload", cbTiDaojiSoftUnload, false);
+    _plugin_registercommand(pluginHandle, "TiDaojiUnhideAll", cbTiDaojiUnhideAll, false);
 }
 
 void TiDaojiStop()
 {
-    _plugin_unregistercallback(pluginHandle, CB_CREATEPROCESS);
-    _plugin_unregistercallback(pluginHandle, CB_ATTACH);
-    _plugin_unregistercallback(pluginHandle, CB_SYSTEMBREAKPOINT);
-    _plugin_unregistercallback(pluginHandle, CB_STOPDEBUG);
-
-    _plugin_unregistercommand(pluginHandle, "TiDaojiPanel");
-    _plugin_unregistercommand(pluginHandle, "TiDaojiHelp");
-    _plugin_unregistercommand(pluginHandle, "TiDaojiAutoHide");
-    _plugin_unregistercommand(pluginHandle, "TiDaojiStatus");
-    _plugin_unregistercommand(pluginHandle, "TiDaojiOptions");
-    _plugin_unregistercommand(pluginHandle, "TiDaojiName");
-    _plugin_unregistercommand(pluginHandle, "TiDaojiSoftUnload");
     _plugin_unregistercommand(pluginHandle, "TiDaojiUnhideAll");
+    _plugin_unregistercommand(pluginHandle, "TiDaojiSoftUnload");
+    _plugin_unregistercommand(pluginHandle, "TiDaojiName");
+    _plugin_unregistercommand(pluginHandle, "TiDaojiOptions");
     _plugin_unregistercommand(pluginHandle, "TiDaojiUnhide");
     _plugin_unregistercommand(pluginHandle, "TiDaoji");
 }

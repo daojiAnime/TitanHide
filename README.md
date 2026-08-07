@@ -54,19 +54,17 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 
 | 命令 / 菜单 | 作用 |
 |-------------|------|
-| 菜单 **Control Panel…** | 主 UI：设备状态 / Type / Hide 按钮 |
-| 菜单 Hide / Unhide / Status / Help | 快捷操作 |
-| `TiDaoji` | 对当前调试进程 `HidePid`（可重复下发） |
+| 命令 | 作用（对齐官方 TitanHide 插件模型） |
+|------|--------------------------------------|
+| `TiDaoji` | 对当前调试进程 `HidePid` + 用户态 `hide` |
 | `TiDaojiUnhide` | `UnhidePid` |
-| `TiDaojiUnhideAll` | `UnhideAll` |
-| `TiDaojiSoftUnload` | L2/L3 SoftUnload |
-| `TiDaojiOptions [n]` | 读/写 Type 位掩码（`BridgeSetting` `TiDaoji/Options`，默认 **`0xFFF`**） |
-| `TiDaojiName [svc]` | 设备名（默认 `TiDaoji` → `\\.\TiDaoji`） |
-| `TiDaojiStatus` | 打开设备探针 + 会话状态 |
-| `TiDaojiHelp` | 帮助 |
+| `TiDaojiOptions [n]` | 读/写 Type（默认 `0xFFF`） |
+| `TiDaojiName [svc]` | 设备名（默认 `TiDaoji`） |
+| `TiDaojiSoftUnload` | （TiDaoji 扩展）SoftUnload |
+| `TiDaojiUnhideAll` | （TiDaoji 扩展）UnhideAll |
 
-Settings UI：Type 勾选、Driver 名、Probe 设备、Apply&Hide、SoftUnload。  
-自动：系统断点 → hide；结束调试 → unhide。
+自动（与官方相同）：`SYSTEMBP` → hide；`STOPDEBUG` → unhide。  
+**无** x64dbg 内嵌对话框（官方亦无）；独立 UI 用 `TiDaojiGUI.exe`。
 
 ### Cheat Engine（原生插件 + 可选 Lua）
 
