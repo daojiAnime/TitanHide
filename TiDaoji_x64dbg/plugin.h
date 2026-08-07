@@ -1,17 +1,12 @@
-#ifndef _TIDAOJI_PLUGIN_H
-#define _TIDAOJI_PLUGIN_H
-
+#pragma once
 #include "pluginmain.h"
 
 #define PLUGIN_NAME "TiDaoji"
-// v4: control panel UI + deployable error hints
-#define PLUGIN_VERSION 6
+#define PLUGIN_VERSION 7
 
 void TiDaojiInit(PLUG_INITSTRUCT* initStruct);
+void TiDaojiSetup(); // real init after bridge ready
 void TiDaojiStop();
-void TiDaojiShowPanel(); // control panel (primary UI)
-// kernel-only hide (no DbgCmdExec — safe from SYSTEMBP callbacks)
+void TiDaojiShowPanel();
 void TiDaojiHideKernelOnly();
 void TiDaojiUnhideKernelOnly();
-
-#endif

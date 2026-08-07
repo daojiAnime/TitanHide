@@ -20,15 +20,18 @@ enum
     MENU_HELP,
 };
 
-BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD reason, LPVOID)
+BOOL WINAPI DllMain(HINSTANCE h, DWORD reason, LPVOID)
 {
     if(reason == DLL_PROCESS_ATTACH)
     {
-        g_hInst = hinstDLL;
-        DisableThreadLibraryCalls(hinstDLL);
+        g_hInst = h;
+        DisableThreadLibraryCalls(h);
     }
     return TRUE;
 }
+
+// ONLY required exports for load: pluginit / plugstop / plugsetup / CBMENUENTRY
+// Do NOT export CBCREATEPROCESS / CBSYSTEMBREAKPOINT / ...
 
 PLUG_EXPORT bool pluginit(PLUG_INITSTRUCT* initStruct)
 {
@@ -45,6 +48,7 @@ PLUG_EXPORT bool pluginit(PLUG_INITSTRUCT* initStruct)
             (LPCSTR)(void*)&pluginit,
             &g_hInst);
     }
+    // no Bridge / no device / no register here
     TiDaojiInit(initStruct);
     return true;
 }
@@ -61,14 +65,22 @@ PLUG_EXPORT void plugsetup(PLUG_SETUPSTRUCT* setupStruct)
         return;
     hwndDlg = setupStruct->hwndDlg;
     hMenu = setupStruct->hMenu;
-    if(!hMenu)
-        return;
-    _plugin_menuaddentry(hMenu, MENU_PANEL, "&Control Panel...");
-    _plugin_menuaddseparator(hMenu);
-    _plugin_menuaddentry(hMenu, MENU_HIDE, "&Hide debuggee");
-    _plugin_menuaddentry(hMenu, MENU_UNHIDE, "&Unhide debuggee");
-    _plugin_menuaddentry(hMenu, MENU_STATUS, "S&tatus");
-    _plugin_menuaddentry(hMenu, MENU_HELP, "&Help");
+    hMenuDisasm = setupStruct->hMenuDisasm;
+    hMenuDump = setupStruct->hMenuDump;
+    hMenuStack = setupStruct->hMenuStack;
+
+    // Bridge is ready — register commands/callbacks here
+    TiDaojiSetup();
+
+    if(hMenu)
+    {
+        _plugin_menuaddentry(hMenu, MENU_PANEL, "&Control Panel...");
+        _plugin_menuaddseparator(hMenu);
+        _plugin_menuaddentry(hMenu, MENU_HIDE, "&Hide debuggee");
+        _plugin_menuaddentry(hMenu, MENU_UNHIDE, "&Unhide debuggee");
+        _plugin_menuaddentry(hMenu, MENU_STATUS, "S&tatus");
+        _plugin_menuaddentry(hMenu, MENU_HELP, "&Help");
+    }
 }
 
 PLUG_EXPORT void CBMENUENTRY(CBTYPE, PLUG_CB_MENUENTRY* info)
