@@ -1,35 +1,44 @@
 #include <windows.h>
 #include "resource.h"
 
-IDD_SETTINGS DIALOGEX 0, 0, 240, 268
+// x64dbg plugin control panel — Win32 dialog (SDK pattern: DialogBox + GuiGetWindowHandle)
+IDD_PANEL DIALOGEX 0, 0, 320, 292
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "TiDaoji Settings"
+CAPTION "TiDaoji Control Panel"
 FONT 9, "Segoe UI"
 BEGIN
-    LTEXT           "", IDC_LBL_PID, 8, 6, 224, 10
-    LTEXT           "Driver:", -1, 8, 20, 32, 10
-    EDITTEXT        IDC_EDT_DRIVER, 44, 18, 100, 12, ES_AUTOHSCROLL
-    PUSHBUTTON      "Probe", IDC_BTN_PROBE, 152, 17, 40, 14
-    LTEXT           "", IDC_LBL_DEVICE, 8, 34, 224, 10
+    GROUPBOX        "Driver / Session", -1, 6, 4, 308, 58
+    LTEXT           "Status: (refresh)", IDC_LBL_STATUS, 14, 18, 292, 12
+    LTEXT           "PID: -", IDC_LBL_PID, 14, 32, 200, 10
+    RTEXT           "Driver:", -1, 14, 46, 28, 10
+    EDITTEXT        IDC_EDT_DRIVER, 46, 44, 100, 12, ES_AUTOHSCROLL
+    PUSHBUTTON      "Refresh", IDC_BTN_REFRESH, 154, 43, 50, 14
+    LTEXT           "If OPEN FAIL: admin CMD -> tools\\dse (KDU -dse 0, sc start TiDaoji, -dse 6)", IDC_LBL_HINT, 14, 58, 290, 10
 
-    GROUPBOX        "Hide Options", -1, 4, 48, 232, 168
+    GROUPBOX        "Hide Type (kernel bits)", -1, 6, 68, 220, 178
+    AUTOCHECKBOX    "ProcessDebugFlags", IDC_CHK_PROCESSDEBUGFLAGS, 14, 82, 200, 10
+    AUTOCHECKBOX    "ProcessDebugPort", IDC_CHK_PROCESSDEBUGPORT, 14, 94, 200, 10
+    AUTOCHECKBOX    "ProcessDebugObjectHandle", IDC_CHK_PROCESSDEBUGOBJECTHANDLE, 14, 106, 200, 10
+    AUTOCHECKBOX    "DebugObject", IDC_CHK_DEBUGOBJECT, 14, 118, 200, 10
+    AUTOCHECKBOX    "SystemDebuggerInformation", IDC_CHK_SYSTEMDEBUGGERINFO, 14, 130, 200, 10
+    AUTOCHECKBOX    "NtClose", IDC_CHK_NTCLOSE, 14, 142, 200, 10
+    AUTOCHECKBOX    "ThreadHideFromDebugger", IDC_CHK_THREADHIDEFROMDBG, 14, 154, 200, 10
+    AUTOCHECKBOX    "NtGetContextThread", IDC_CHK_NTGETCONTEXTTHREAD, 14, 166, 200, 10
+    AUTOCHECKBOX    "NtSetContextThread", IDC_CHK_NTSETCONTEXTTHREAD, 14, 178, 200, 10
+    AUTOCHECKBOX    "NtSystemDebugControl", IDC_CHK_NTSYSTEMDEBUGCONTROL, 14, 190, 200, 10
+    AUTOCHECKBOX    "SystemFirmwareVMScrub", IDC_CHK_NTSYSTEMVMINFO, 14, 202, 200, 10
+    AUTOCHECKBOX    "NtTerminateProcess (VMP)", IDC_CHK_NTTERMINATEPROCESS, 14, 214, 200, 10
 
-    AUTOCHECKBOX    "ProcessDebugFlags", IDC_CHK_PROCESSDEBUGFLAGS, 12, 60, 200, 10
-    AUTOCHECKBOX    "ProcessDebugPort", IDC_CHK_PROCESSDEBUGPORT, 12, 72, 200, 10
-    AUTOCHECKBOX    "ProcessDebugObjectHandle", IDC_CHK_PROCESSDEBUGOBJECTHANDLE, 12, 84, 200, 10
-    AUTOCHECKBOX    "DebugObject", IDC_CHK_DEBUGOBJECT, 12, 96, 200, 10
-    AUTOCHECKBOX    "SystemDebuggerInformation", IDC_CHK_SYSTEMDEBUGGERINFO, 12, 108, 200, 10
-    AUTOCHECKBOX    "NtClose", IDC_CHK_NTCLOSE, 12, 120, 200, 10
-    AUTOCHECKBOX    "ThreadHideFromDebugger", IDC_CHK_THREADHIDEFROMDBG, 12, 132, 200, 10
-    AUTOCHECKBOX    "NtGetContextThread", IDC_CHK_NTGETCONTEXTTHREAD, 12, 144, 200, 10
-    AUTOCHECKBOX    "NtSetContextThread", IDC_CHK_NTSETCONTEXTTHREAD, 12, 156, 200, 10
-    AUTOCHECKBOX    "NtSystemDebugControl", IDC_CHK_NTSYSTEMDEBUGCONTROL, 12, 168, 200, 10
-    AUTOCHECKBOX    "SystemFirmwareVMScrub", IDC_CHK_NTSYSTEMVMINFO, 12, 180, 200, 10
-    AUTOCHECKBOX    "NtTerminateProcess (VMP kill)", IDC_CHK_NTTERMINATEPROCESS, 12, 192, 210, 10
+    PUSHBUTTON      "Select All", IDC_BTN_SELALL, 14, 228, 56, 14
+    PUSHBUTTON      "Select None", IDC_BTN_SELNONE, 76, 228, 56, 14
+    DEFPUSHBUTTON   "Apply Type", IDC_BTN_APPLY, 140, 228, 72, 14
 
-    PUSHBUTTON      "Select &All", IDC_BTN_SELALL, 4, 224, 52, 14
-    PUSHBUTTON      "Select &None", IDC_BTN_SELNONE, 60, 224, 52, 14
-    DEFPUSHBUTTON   "&Apply && Hide", IDC_BTN_APPLY, 148, 224, 88, 14
-    PUSHBUTTON      "Soft&Unload", IDC_BTN_SOFTUNLOAD, 4, 244, 72, 14
-    PUSHBUTTON      "Close", IDCANCEL, 148, 244, 88, 14
+    GROUPBOX        "Actions", -1, 232, 68, 82, 178
+    PUSHBUTTON      "Hide", IDC_BTN_HIDE, 242, 86, 62, 18
+    PUSHBUTTON      "Unhide", IDC_BTN_UNHIDE, 242, 110, 62, 18
+    PUSHBUTTON      "Unhide All", IDC_BTN_UNHIDEALL, 242, 134, 62, 18
+    PUSHBUTTON      "SoftUnload", IDC_BTN_SOFTUNLOAD, 242, 158, 62, 18
+    PUSHBUTTON      "Close", IDC_BTN_CLOSE, 242, 220, 62, 18
+
+    LTEXT           "NOT PG-safe. InfinityHook. No dual-IH with CR. Auto: SYSTEMBP->Hide.", -1, 6, 274, 308, 12
 END

@@ -1,14 +1,14 @@
-#ifndef _TEST_H
-#define _TEST_H
+#ifndef _TIDAOJI_PLUGIN_H
+#define _TIDAOJI_PLUGIN_H
 
 #include "pluginmain.h"
 
 #define PLUGIN_NAME "TiDaoji"
-// PR4: help/status/unhideall + better errors; keep in sync with README plugin section
-#define PLUGIN_VERSION 3
+// v4: control panel UI + deployable error hints
+#define PLUGIN_VERSION 4
 
 void TiDaojiInit(PLUG_INITSTRUCT* initStruct);
 void TiDaojiStop();
-void TiDaojiShowSettings();
+void TiDaojiShowPanel(); // control panel (primary UI)
 
-#endif // _TEST_H
+#endif

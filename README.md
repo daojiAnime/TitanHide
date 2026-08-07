@@ -54,7 +54,8 @@ TiDaoji 由 [mrexodia/TitanHide](https://github.com/mrexodia/TitanHide) 分叉�
 
 | 命令 / 菜单 | 作用 |
 |-------------|------|
-| 菜单 **Hide / Unhide / Status / Settings / Help** | 点选即执行 |
+| 菜单 **Control Panel…** | 主 UI：设备状态 / Type / Hide 按钮 |
+| 菜单 Hide / Unhide / Status / Help | 快捷操作 |
 | `TiDaoji` | 对当前调试进程 `HidePid`（可重复下发） |
 | `TiDaojiUnhide` | `UnhidePid` |
 | `TiDaojiUnhideAll` | `UnhideAll` |
